@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Interface gráfica PyQt6 para preenchimento e geração de trabalhos do SCEN com IA.
+"""Interface gráfica PyQt6 responsiva e polida para trabalhos acadêmicos do SCEN com IA.
 
-Compatível com Windows, Linux e macOS.
+Compatível com Windows, Linux e macOS. Adapta-se automaticamente a diferentes
+tamanhos de tela e resoluções.
 """
 
 from __future__ import annotations
@@ -14,14 +15,14 @@ from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QFormLayout,
     QFrame,
-    QGroupBox,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
@@ -34,6 +35,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -58,131 +60,124 @@ RASCUNHOS_DIR = BASE_DIR / "Rascunhos"
 ATALHOS_DISCIPLINAS: list[tuple[str, str, dict[str, Any]]] = [
     ("Exegese do NT — Passos 1 a 7", "exegese_nt", {"disciplina": "Exegese do Novo Testamento"}),
     ("Teologia da Família — Paper", "paper", {"disciplina": "Teologia da Família"}),
-    ("Teologia da Família — Família do Pastor (Declaração)", "declaracao_atual", {"disciplina": "Teologia da Família", "titulo": "Família do Pastor"}),
-    ("Apologética — Por que você acredita? (Relatório)", "relatorio_leitura", {"disciplina": "Apologética", "titulo": "Por que você acredita?"}),
-    ("Prática da Pregação — Sermão em Narrativa", "sermao_narrativa", {"disciplina": "Prática da Pregação"}),
-    ("Prática da Pregação — Sermão em Evangelho", "sermao_evangelho", {"disciplina": "Prática da Pregação"}),
-    ("Prática da Pregação — Sermão em Parábola", "sermao_parabola", {"disciplina": "Prática da Pregação"}),
-    ("Soteriologia — Salvos pela Graça (Declaração)", "declaracao_antiga", {"disciplina": "Soteriologia", "titulo": "Salvos pela Graça", "subtitulo": "a doutrina bíblica da salvação"}),
+    ("Teologia da Família — Família do Pastor", "declaracao_atual", {"disciplina": "Teologia da Família", "titulo": "Família do Pastor"}),
+    ("Apologética — Por que você acredita?", "relatorio_leitura", {"disciplina": "Apologética", "titulo": "Por que você acredita?"}),
+    ("Prática da Pregação — Sermão Narrativa", "sermao_narrativa", {"disciplina": "Prática da Pregação"}),
+    ("Prática da Pregação — Sermão Evangelho", "sermao_evangelho", {"disciplina": "Prática da Pregação"}),
+    ("Prática da Pregação — Sermão Parábola", "sermao_parabola", {"disciplina": "Prática da Pregação"}),
+    ("Soteriologia — Salvos pela Graça", "declaracao_antiga", {"disciplina": "Soteriologia", "titulo": "Salvos pela Graça", "subtitulo": "a doutrina bíblica da salvação"}),
 ]
 
 MODELOS_LISTA: list[tuple[str, str]] = [
     ("01. Declaração de Leitura Atual (Cronograma)", "declaracao_atual"),
     ("02. Declaração de Leitura Antiga (Simples)", "declaracao_antiga"),
     ("03. Relatório de Leitura (7 Questões)", "relatorio_leitura"),
-    ("04. Paper", "paper"),
+    ("04. Paper Acadêmico", "paper"),
     ("05. Exegese do Novo Testamento (7 Passos)", "exegese_nt"),
     ("06. Sermão em Narrativa", "sermao_narrativa"),
     ("07. Sermão em Evangelho", "sermao_evangelho"),
     ("08. Sermão em Parábola", "sermao_parabola"),
     ("09. Fichamento", "fichamento"),
-    ("10. Resumo", "resumo"),
+    ("10. Resumo (150–500 palavras)", "resumo"),
     ("11. Resenha / Recensão", "resenha"),
     ("12. Artigo Científico", "artigo"),
 ]
 
+MODELOS_POR_PROVEDOR: dict[str, list[str]] = {
+    "Gemini": ["gemini-4-carbon", "gemini-4-argon", "gemini-2.5-pro", "gemini-3.5-flash", "gemini-2.5-flash"],
+    "OpenAI": ["gpt-4.1", "o3", "gpt-4o", "o4-mini", "gpt-4o-mini"],
+    "Ollama": ["llama3.3", "qwen2.5:14b", "llama3.1", "mistral"],
+}
+
 INSTRUCOES_POR_TIPO: dict[str, tuple[str, str]] = {
     "declaracao_atual": (
         "Declaração de Leitura Atual (com Cronograma)",
-        "• O que preencher: Cabeçalho + Referência ABNT da obra + Tabela de Cronograma (Seção, Título, Datas e Horas).\n"
-        "• Dica: Anexe o sumário/PDF do livro ou cole os capítulos no painel de IA para preencher a tabela automaticamente.",
+        "• Preencha: Cabeçalho + Referência ABNT + Tabela de Cronograma (Seção, Título, Datas e Horas).\n"
+        "• Dica: Anexe o sumário/PDF do livro no painel de IA para preencher a tabela automaticamente.",
     ),
     "declaracao_antiga": (
-        "Declaração de Leitura Antiga (Simples — Colossenses 3.9-10)",
-        "• O que preencher: Cabeçalho (com nome do aluno e obra) + Data da assinatura.\n"
-        "• Dica: Ideal para disciplinas que pedem apenas a declaração simples assinada.",
+        "Declaração de Leitura Antiga (Simples — Cl 3.9-10)",
+        "• Preencha: Cabeçalho (nome do aluno e livro) + Data da assinatura.",
     ),
     "relatorio_leitura": (
         "Relatório de Leitura (7 Questões Oficiais SCEN)",
-        "• O que preencher: Cabeçalho + Referência ABNT + Respostas das 7 perguntas (tema, ideia central, argumentos, problematização, síntese, avaliação/ministério, conclusão).\n"
-        "• Dica: Anexe o livro/resumo no painel de IA e clique em 'Completar com IA' para gerar as 7 respostas.",
+        "• Preencha: Cabeçalho + Referência ABNT + Respostas das 7 perguntas oficiais.\n"
+        "• Dica: Anexe o livro ou resumo na área de IA e clique em 'Completar com IA'.",
     ),
     "paper": (
         "Paper Acadêmico (SCEN 2025)",
-        "• O que preencher: Cabeçalho + Sinopse + Seções numeradas (use '## Título') + Referências ABNT.\n"
-        "• Dica: Use os comandos rápidos no painel da direita para ajustar o tom teológico e ministerial.",
+        "• Preencha: Cabeçalho + Sinopse + Seções numeradas ('## Título') + Referências ABNT.",
     ),
     "exegese_nt": (
         "Exegese do Novo Testamento (Passos 1 a 7)",
-        "• O que preencher: Cabeçalho + Passagem Bíblica Base + Conteúdo dos 7 Passos exegéticos + Referências.\n"
-        "• Dica: Informe a passagem (ex.: Rm 8:1-11) e anexe suas notas de aula para a IA estruturar os 7 passos.",
+        "• Preencha: Cabeçalho + Passagem Bíblica Base + Conteúdo dos 7 Passos + Referências ABNT.",
     ),
     "sermao_narrativa": (
         "Sermão em Narrativa Bíblica",
-        "• O que preencher: Cabeçalho + Texto Base + Tema, Contexto Narrativo, Introdução, Desenvolvimento, Aplicação e Conclusão.\n"
-        "• Dica: Cole o texto bíblico e esboço no painel de contexto para gerar a estrutura homilética.",
+        "• Preencha: Cabeçalho + Texto Base + Tema, Contexto Narrativo, Introdução, Desenvolvimento, Aplicação e Conclusão.",
     ),
     "sermao_evangelho": (
         "Sermão em Evangelho",
-        "• O que preencher: Cabeçalho + Texto Base + Tema, Contexto do Ministério de Jesus, Introdução, Exposição, Foco Cristológico e Conclusão.",
+        "• Preencha: Cabeçalho + Texto Base + Contexto do Ministério de Jesus, Exposição, Foco Cristológico e Conclusão.",
     ),
     "sermao_parabola": (
         "Sermão em Parábola",
-        "• O que preencher: Cabeçalho + Texto Base + Ocasião da Parábola, Ponto Central, Contrastes, Aplicação ao Reino e Conclusão.",
+        "• Preencha: Cabeçalho + Texto Base + Ocasião da Parábola, Ponto Central, Contrastes, Aplicação e Conclusão.",
     ),
     "fichamento": (
         "Fichamento (Resumo / Transcrição / Comentário)",
-        "• O que preencher: Cabeçalho + Tipo de Fichamento + Referência ABNT + Fichas (use '## Título da Ficha').",
+        "• Preencha: Cabeçalho + Tipo de Fichamento + Referência ABNT + Fichas ('## Título da Ficha').",
     ),
     "resumo": (
         "Resumo Acadêmico (150 a 500 palavras)",
-        "• O que preencher: Cabeçalho + Referência ABNT + Texto em parágrafo único (150–500 palavras) + Palavras-chave.",
+        "• Preencha: Cabeçalho + Referência ABNT + Texto em parágrafo único + Palavras-chave.",
     ),
     "resenha": (
         "Resenha / Recensão Crítica",
-        "• O que preencher: Cabeçalho + Referência ABNT + Parágrafos de apresentação, síntese e avaliação crítica.",
+        "• Preencha: Cabeçalho + Referência ABNT + Parágrafos de apresentação, síntese e avaliação crítica.",
     ),
     "artigo": (
         "Artigo Científico (SCEN 2025)",
-        "• O que preencher: Cabeçalho + Resumo + Palavras-chave + Seções (Introdução, Referencial, Método, Resultados, Considerações Finais) + Referências.",
+        "• Preencha: Cabeçalho + Resumo + Palavras-chave + Seções + Referências ABNT.",
     ),
 }
 
 TEMA_OPOSTOS = """
-    QMainWindow { background-color: #0f172a; }
+    QMainWindow { background-color: #0b1120; }
+    QWidget { font-family: "Segoe UI", "Inter", Arial, sans-serif; font-size: 13px; }
     QWidget#barraTopo, QWidget#rodape {
         background-color: #0f172a;
         color: #f8fafc;
+        border-bottom: 1px solid #1e293b;
     }
+    QWidget#rodape { border-top: 1px solid #1e293b; border-bottom: none; }
     QWidget#painelTrabalhos {
         background-color: #0f172a;
         color: #f8fafc;
     }
-    QWidget#painelTrabalhos QGroupBox {
-        background-color: #1e293b;
-        color: #f8fafc;
-        border: 1px solid #334155;
-        border-radius: 8px;
-        margin-top: 12px;
-        padding-top: 14px;
-        font-weight: bold;
-    }
-    QWidget#painelTrabalhos QGroupBox::title {
-        subcontrol-origin: margin;
-        left: 10px;
-        padding: 0 6px;
-        color: #38bdf8;
-    }
     QWidget#painelTrabalhos QListWidget {
-        background-color: #0f172a;
-        color: #f8fafc;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 4px;
+        background-color: #0b1120;
+        color: #e2e8f0;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 6px;
+        outline: none;
     }
     QWidget#painelTrabalhos QListWidget::item {
-        padding: 7px 8px;
-        border-radius: 4px;
+        padding: 9px 10px;
+        margin-bottom: 3px;
+        border-radius: 6px;
     }
     QWidget#painelTrabalhos QListWidget::item:selected {
         background-color: #2563eb;
         color: #ffffff;
         font-weight: bold;
     }
-    QWidget#painelTrabalhos QListWidget::item:hover {
+    QWidget#painelTrabalhos QListWidget::item:hover:!selected {
         background-color: #1e293b;
     }
-    QScrollArea, QWidget#conteudoForm, QWidget#painelIA {
+    QScrollArea { border: none; background-color: #f1f5f9; }
+    QWidget#conteudoForm, QWidget#conteudoIA {
         background-color: #f1f5f9;
         color: #0f172a;
     }
@@ -190,42 +185,43 @@ TEMA_OPOSTOS = """
         background-color: #0f172a;
         color: #f8fafc;
         border-left: 5px solid #38bdf8;
-        border-radius: 8px;
-        padding: 10px;
+        border-radius: 10px;
+        padding: 12px 14px;
     }
     QFrame#bannerInstrucoes QLabel { color: #f8fafc; }
-    QGroupBox {
+    QFrame#card {
         background-color: #ffffff;
-        color: #0f172a;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        margin-top: 12px;
-        padding-top: 14px;
+        border: 1px solid #dbe2ea;
+        border-radius: 10px;
+        padding: 12px;
+    }
+    QLabel#cardTitulo {
+        font-size: 14px;
         font-weight: bold;
-    }
-    QGroupBox::title {
-        subcontrol-origin: margin;
-        left: 10px;
-        padding: 0 6px;
         color: #1e3a8a;
+        padding-bottom: 4px;
     }
-    QLabel { color: #0f172a; font-weight: 500; }
-    QWidget#barraTopo QLabel, QWidget#rodape QLabel { color: #f8fafc; }
+    QLabel#campoRotulo {
+        font-weight: 600;
+        color: #334155;
+        font-size: 12px;
+    }
     QLineEdit, QPlainTextEdit, QComboBox, QTableWidget {
         background-color: #ffffff;
         color: #0f172a;
-        border: 2px solid #cbd5e1;
+        border: 1.5px solid #cbd5e1;
         border-radius: 6px;
-        padding: 6px;
+        padding: 7px 9px;
         selection-background-color: #2563eb;
     }
     QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus {
-        border: 2px solid #2563eb;
+        border: 1.5px solid #2563eb;
+        background-color: #f8fafc;
     }
     QHeaderView::section {
         background-color: #0f172a;
         color: #f8fafc;
-        padding: 6px;
+        padding: 7px;
         font-weight: bold;
         border: 1px solid #334155;
     }
@@ -236,111 +232,75 @@ TEMA_OPOSTOS = """
         border-radius: 6px;
     }
     QCheckBox { color: #0f172a; font-weight: 600; }
-    QTabWidget::pane { border: 1px solid #334155; background-color: #f1f5f9; }
+    QTabWidget::pane { border: none; background-color: #f1f5f9; }
     QTabBar::tab {
         background-color: #1e293b;
         color: #cbd5e1;
-        padding: 9px 18px;
+        padding: 10px 18px;
         margin-right: 4px;
-        border-top-left-radius: 6px;
-        border-top-right-radius: 6px;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
         font-weight: bold;
     }
     QTabBar::tab:selected { background-color: #2563eb; color: #ffffff; }
     QPushButton {
         background-color: #e2e8f0;
         color: #0f172a;
-        border: 1px solid #94a3b8;
-        border-radius: 6px;
-        padding: 8px 14px;
-        font-weight: bold;
+        border: 1px solid #cbd5e1;
+        border-radius: 7px;
+        padding: 8px 13px;
+        font-weight: 600;
     }
     QPushButton:hover { background-color: #cbd5e1; }
     QPushButton:checked { background-color: #2563eb; color: #ffffff; border: 1px solid #38bdf8; }
     QPushButton#btnPrimario {
         background-color: #2563eb;
         color: #ffffff;
-        border: 1px solid #1d4ed8;
+        border: none;
+        padding: 9px 18px;
     }
     QPushButton#btnPrimario:hover { background-color: #1d4ed8; }
     QPushButton#btnIA {
         background-color: #0d9488;
         color: #ffffff;
-        border: 1px solid #0f766e;
+        border: none;
+        padding: 10px 16px;
+        font-size: 13.5px;
     }
     QPushButton#btnIA:hover { background-color: #0f766e; }
-    QPushButton#btnTopo {
+    QPushButton#btnTopo, QPushButton#btnSidebarTab {
         background-color: #1e293b;
         color: #f8fafc;
-        border: 1px solid #475569;
+        border: 1px solid #334155;
     }
-    QPushButton#btnTopo:hover { background-color: #334155; }
+    QPushButton#btnTopo:hover, QPushButton#btnSidebarTab:hover { background-color: #334155; }
+    QPushButton#btnSidebarTab:checked { background-color: #2563eb; border-color: #38bdf8; }
+    QSplitter::handle { background-color: #1e293b; width: 3px; }
 """
 
 TEMA_ESCURO_TOTAL = """
-    QMainWindow, QWidget { background-color: #0b1120; color: #f8fafc; }
-    QFrame#bannerInstrucoes {
-        background-color: #1e293b;
-        border-left: 5px solid #38bdf8;
-        border-radius: 8px;
-        padding: 10px;
-    }
-    QGroupBox {
-        background-color: #111827;
-        color: #f8fafc;
-        border: 1px solid #334155;
-        border-radius: 8px;
-        margin-top: 12px;
-        padding-top: 14px;
-        font-weight: bold;
-    }
-    QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; color: #38bdf8; }
+    QMainWindow, QWidget { background-color: #0b1120; color: #f8fafc; font-family: "Segoe UI", "Inter", Arial, sans-serif; font-size: 13px; }
+    QScrollArea, QWidget#conteudoForm, QWidget#conteudoIA { background-color: #0b1120; color: #f8fafc; border: none; }
+    QFrame#bannerInstrucoes { background-color: #1e293b; border-left: 5px solid #38bdf8; border-radius: 10px; padding: 12px 14px; }
+    QFrame#card { background-color: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 12px; }
+    QLabel#cardTitulo { font-size: 14px; font-weight: bold; color: #38bdf8; padding-bottom: 4px; }
+    QLabel#campoRotulo { font-weight: 600; color: #cbd5e1; font-size: 12px; }
     QLineEdit, QPlainTextEdit, QComboBox, QTableWidget, QListWidget {
-        background-color: #1e293b;
-        color: #f8fafc;
-        border: 1px solid #475569;
-        border-radius: 6px;
-        padding: 6px;
+        background-color: #1e293b; color: #f8fafc; border: 1.5px solid #334155; border-radius: 6px; padding: 7px 9px;
     }
+    QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border: 1.5px solid #38bdf8; }
+    QListWidget::item { padding: 8px 10px; border-radius: 6px; }
     QListWidget::item:selected { background-color: #2563eb; color: #ffffff; }
-    QHeaderView::section { background-color: #0f172a; color: #38bdf8; padding: 6px; font-weight: bold; }
-    QPushButton {
-        background-color: #1e293b;
-        color: #f8fafc;
-        border: 1px solid #475569;
-        border-radius: 6px;
-        padding: 8px 14px;
-        font-weight: bold;
-    }
+    QHeaderView::section { background-color: #0f172a; color: #38bdf8; padding: 7px; font-weight: bold; }
+    QTabBar::tab { background-color: #1e293b; color: #cbd5e1; padding: 10px 18px; border-top-left-radius: 8px; border-top-right-radius: 8px; font-weight: bold; }
+    QTabBar::tab:selected { background-color: #2563eb; color: #ffffff; }
+    QPushButton { background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 7px; padding: 8px 13px; font-weight: 600; }
     QPushButton:hover { background-color: #334155; }
-    QPushButton:checked { background-color: #2563eb; color: #ffffff; }
-    QPushButton#btnPrimario { background-color: #2563eb; color: #ffffff; border: none; }
-    QPushButton#btnIA { background-color: #0d9488; color: #ffffff; border: none; }
+    QPushButton:checked { background-color: #2563eb; color: #ffffff; border-color: #38bdf8; }
+    QPushButton#btnPrimario { background-color: #2563eb; color: #ffffff; border: none; padding: 9px 18px; }
+    QPushButton#btnIA { background-color: #0d9488; color: #ffffff; border: none; padding: 10px 16px; }
+    QSplitter::handle { background-color: #1e293b; width: 3px; }
 """
-
-
-MODELOS_POR_PROVEDOR: dict[str, list[str]] = {
-    "Gemini": [
-        "gemini-4-carbon",
-        "gemini-4-argon",
-        "gemini-2.5-pro",
-        "gemini-3.5-flash",
-        "gemini-2.5-flash",
-    ],
-    "OpenAI": [
-        "gpt-4.1",
-        "o3",
-        "gpt-4o",
-        "o4-mini",
-        "gpt-4o-mini",
-    ],
-    "Ollama": [
-        "llama3.3",
-        "qwen2.5:14b",
-        "llama3.1",
-        "mistral",
-    ],
-}
 
 
 class AIWorker(QThread):
@@ -372,15 +332,18 @@ class AIWorker(QThread):
 
 
 class ScenApp(QMainWindow):
-    """Janela principal do Gerador de Trabalhos SCEN."""
+    """Janela principal responsiva do Gerador de Trabalhos SCEN."""
 
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("SCEN — Gerador de Trabalhos Acadêmicos (DOCX + PDF + IA)")
-        self.resize(1460, 900)
+        self.setMinimumSize(760, 540)
+        self._ajustar_tamanho_tela()
 
         self.tipo_atual = "relatorio_leitura"
         self.tema_escuro = False
+        self.modo_forçado: str | None = None
+        self.modo_atual = "colunas"
         self.arquivos_contexto: list[tuple[str, str]] = []
         self.campos_dinamicos: dict[str, Any] = {}
         self.worker: AIWorker | None = None
@@ -389,37 +352,68 @@ class ScenApp(QMainWindow):
         self.setStyleSheet(TEMA_OPOSTOS)
         self._carregar_config()
         self._selecionar_tipo("relatorio_leitura", {"disciplina": "Apologética", "titulo": "Por que você acredita?"})
+        if self.width() < 1100:
+            self._alternar_modo("abas", manual=False)
+
+    def _ajustar_tamanho_tela(self) -> None:
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            w = min(1420, max(780, int(geo.width() * 0.92)))
+            h = min(880, max(560, int(geo.height() * 0.90)))
+            self.resize(w, h)
+        else:
+            self.resize(1280, 780)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if self.modo_forçado is None:
+            desejado = "abas" if event.size().width() < 1100 else "colunas"
+            if desejado != self.modo_atual:
+                self._alternar_modo(desejado, manual=False)
+
+    def _criar_card(self, titulo: str) -> tuple[QFrame, QVBoxLayout]:
+        card = QFrame()
+        card.setObjectName("card")
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setSpacing(8)
+        lbl = QLabel(titulo)
+        lbl.setObjectName("cardTitulo")
+        lay.addWidget(lbl)
+        return card, lay
 
     def _construir_ui(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
         layout_raiz = QVBoxLayout(central)
-        layout_raiz.setContentsMargins(10, 10, 10, 10)
-        layout_raiz.setSpacing(8)
+        layout_raiz.setContentsMargins(0, 0, 0, 0)
+        layout_raiz.setSpacing(0)
 
         # Barra superior
         barra_widget = QWidget()
         barra_widget.setObjectName("barraTopo")
         barra_topo = QHBoxLayout(barra_widget)
-        barra_topo.setContentsMargins(10, 6, 10, 6)
+        barra_topo.setContentsMargins(14, 10, 14, 10)
+        barra_topo.setSpacing(8)
 
-        lbl_titulo = QLabel("SCEN — Trabalhos Acadêmicos (DOCX + PDF + IA)")
+        lbl_titulo = QLabel("SCEN — Trabalhos Acadêmicos")
         lbl_titulo.setStyleSheet("font-size: 16px; font-weight: bold; color: #38bdf8;")
         barra_topo.addWidget(lbl_titulo)
         barra_topo.addStretch()
 
-        self.btn_tema = QPushButton("Tema: Opostos (Claro/Escuro)")
+        self.btn_tema = QPushButton("Tema: Opostos")
         self.btn_tema.setObjectName("btnTopo")
         self.btn_tema.clicked.connect(self._alternar_tema)
 
-        self.btn_modo_colunas = QPushButton("Visão Completa (3 Colunas)")
+        self.btn_modo_colunas = QPushButton("3 Colunas")
         self.btn_modo_colunas.setCheckable(True)
         self.btn_modo_colunas.setChecked(True)
-        self.btn_modo_colunas.clicked.connect(lambda: self._alternar_modo("colunas"))
+        self.btn_modo_colunas.clicked.connect(lambda: self._alternar_modo("colunas", manual=True))
 
-        self.btn_modo_abas = QPushButton("Modo Guiado (Abas)")
+        self.btn_modo_abas = QPushButton("Guiado (Abas)")
         self.btn_modo_abas.setCheckable(True)
-        self.btn_modo_abas.clicked.connect(lambda: self._alternar_modo("abas"))
+        self.btn_modo_abas.clicked.connect(lambda: self._alternar_modo("abas", manual=True))
 
         barra_topo.addWidget(self.btn_tema)
         barra_topo.addWidget(self.btn_modo_colunas)
@@ -432,6 +426,7 @@ class ScenApp(QMainWindow):
         self.painel_ia = self._criar_painel_ia()
 
         self.container_conteudo = QVBoxLayout()
+        self.container_conteudo.setContentsMargins(0, 0, 0, 0)
         layout_raiz.addLayout(self.container_conteudo, stretch=1)
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -442,36 +437,35 @@ class ScenApp(QMainWindow):
         rodape_widget = QWidget()
         rodape_widget.setObjectName("rodape")
         rodape = QHBoxLayout(rodape_widget)
-        rodape.setContentsMargins(10, 6, 10, 6)
+        rodape.setContentsMargins(14, 10, 14, 10)
+        rodape.setSpacing(8)
 
-        self.lbl_status = QLabel("Pronto. Escolha o trabalho à esquerda e siga as instruções no topo.")
-        self.lbl_status.setStyleSheet("color: #38bdf8; font-weight: bold;")
+        self.lbl_status = QLabel("Pronto. Escolha o trabalho e siga as instruções no topo.")
+        self.lbl_status.setStyleSheet("color: #38bdf8; font-weight: 600;")
+        self.lbl_status.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         rodape.addWidget(self.lbl_status, stretch=1)
 
-        btn_salvar_rasc = QPushButton("Salvar Rascunho")
-        btn_salvar_rasc.clicked.connect(self._salvar_rascunho)
-        btn_carregar_rasc = QPushButton("Carregar Rascunho")
-        btn_carregar_rasc.clicked.connect(self._carregar_rascunho)
-        btn_abrir_pasta = QPushButton("Abrir Pasta Gerados")
-        btn_abrir_pasta.clicked.connect(self._abrir_pasta_gerados)
-        btn_gerar = QPushButton("Gerar DOCX + PDF")
-        btn_gerar.setObjectName("btnPrimario")
-        btn_gerar.clicked.connect(self._gerar_arquivos)
-
-        rodape.addWidget(btn_salvar_rasc)
-        rodape.addWidget(btn_carregar_rasc)
-        rodape.addWidget(btn_abrir_pasta)
-        rodape.addWidget(btn_gerar)
+        for texto, slot, obj_name in [
+            ("Salvar Rascunho", self._salvar_rascunho, None),
+            ("Carregar", self._carregar_rascunho, None),
+            ("Abrir Pasta", self._abrir_pasta_gerados, None),
+            ("Gerar DOCX + PDF", self._gerar_arquivos, "btnPrimario"),
+        ]:
+            btn = QPushButton(texto)
+            if obj_name:
+                btn.setObjectName(obj_name)
+            btn.clicked.connect(slot)
+            rodape.addWidget(btn)
         layout_raiz.addWidget(rodape_widget)
 
     def _alternar_tema(self) -> None:
         self.tema_escuro = not self.tema_escuro
         if self.tema_escuro:
             self.setStyleSheet(TEMA_ESCURO_TOTAL)
-            self.btn_tema.setText("Tema: Escuro Total")
+            self.btn_tema.setText("Tema: Escuro")
         else:
             self.setStyleSheet(TEMA_OPOSTOS)
-            self.btn_tema.setText("Tema: Opostos (Claro/Escuro)")
+            self.btn_tema.setText("Tema: Opostos")
 
     def _montar_modo_colunas(self) -> None:
         while self.container_conteudo.count():
@@ -481,7 +475,9 @@ class ScenApp(QMainWindow):
         self.splitter.addWidget(self.painel_trabalhos)
         self.splitter.addWidget(self.painel_formulario)
         self.splitter.addWidget(self.painel_ia)
-        self.splitter.setSizes([280, 700, 460])
+        self.splitter.setStretchFactor(0, 2)
+        self.splitter.setStretchFactor(1, 5)
+        self.splitter.setStretchFactor(2, 3)
         self.container_conteudo.addWidget(self.splitter)
 
     def _montar_modo_abas(self) -> None:
@@ -495,7 +491,10 @@ class ScenApp(QMainWindow):
         self.tabs.show()
         self.container_conteudo.addWidget(self.tabs)
 
-    def _alternar_modo(self, modo: str) -> None:
+    def _alternar_modo(self, modo: str, manual: bool = True) -> None:
+        if manual:
+            self.modo_forçado = modo
+        self.modo_atual = modo
         if modo == "colunas":
             self.btn_modo_colunas.setChecked(True)
             self.btn_modo_abas.setChecked(False)
@@ -508,109 +507,165 @@ class ScenApp(QMainWindow):
     def _criar_painel_trabalhos(self) -> QWidget:
         w = QWidget()
         w.setObjectName("painelTrabalhos")
+        w.setMinimumWidth(240)
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setContentsMargins(10, 12, 10, 12)
+        lay.setSpacing(10)
 
-        grp_atalhos = QGroupBox("Trabalhos da Lista (SCEN)")
-        l1 = QVBoxLayout(grp_atalhos)
+        lbl = QLabel("TRABALHOS & MODELOS")
+        lbl.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: bold; letter-spacing: 0.8px;")
+        lay.addWidget(lbl)
+
+        # Toggle limpo entre Da Lista vs Todos os 12
+        h_seg = QHBoxLayout()
+        self.btn_tab_atalhos = QPushButton("Da Lista (8)")
+        self.btn_tab_atalhos.setObjectName("btnSidebarTab")
+        self.btn_tab_atalhos.setCheckable(True)
+        self.btn_tab_atalhos.setChecked(True)
+        self.btn_tab_todos = QPushButton("Todos (12)")
+        self.btn_tab_todos.setObjectName("btnSidebarTab")
+        self.btn_tab_todos.setCheckable(True)
+        h_seg.addWidget(self.btn_tab_atalhos)
+        h_seg.addWidget(self.btn_tab_todos)
+        lay.addLayout(h_seg)
+
         self.lista_atalhos = QListWidget()
         for nome, tipo, pre in ATALHOS_DISCIPLINAS:
             item = QListWidgetItem(nome)
             item.setData(Qt.ItemDataRole.UserRole, (tipo, pre))
             self.lista_atalhos.addItem(item)
         self.lista_atalhos.itemClicked.connect(self._on_atalho_clicado)
-        l1.addWidget(self.lista_atalhos)
-        lay.addWidget(grp_atalhos)
 
-        grp_todos = QGroupBox("Todos os 12 Modelos")
-        l2 = QVBoxLayout(grp_todos)
         self.lista_modelos = QListWidget()
         for nome, tipo in MODELOS_LISTA:
             item = QListWidgetItem(nome)
             item.setData(Qt.ItemDataRole.UserRole, tipo)
             self.lista_modelos.addItem(item)
         self.lista_modelos.itemClicked.connect(self._on_modelo_clicado)
-        l2.addWidget(self.lista_modelos)
-        lay.addWidget(grp_todos)
+        self.lista_modelos.hide()
+
+        def mostrar_lista(qual: str) -> None:
+            eh_atalho = qual == "atalhos"
+            self.btn_tab_atalhos.setChecked(eh_atalho)
+            self.btn_tab_todos.setChecked(not eh_atalho)
+            self.lista_atalhos.setVisible(eh_atalho)
+            self.lista_modelos.setVisible(not eh_atalho)
+
+        self.btn_tab_atalhos.clicked.connect(lambda: mostrar_lista("atalhos"))
+        self.btn_tab_todos.clicked.connect(lambda: mostrar_lista("todos"))
+
+        lay.addWidget(self.lista_atalhos, stretch=1)
+        lay.addWidget(self.lista_modelos, stretch=1)
         return w
 
     def _criar_painel_formulario(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setMinimumWidth(360)
         cont = QWidget()
         cont.setObjectName("conteudoForm")
         self.lay_form_root = QVBoxLayout(cont)
-        self.lay_form_root.setContentsMargins(10, 8, 10, 10)
+        self.lay_form_root.setContentsMargins(14, 14, 14, 14)
+        self.lay_form_root.setSpacing(12)
 
         # Banner de Instruções e O que Preencher NO TOPO
         self.banner_instrucoes = QFrame()
         self.banner_instrucoes.setObjectName("bannerInstrucoes")
         lay_ban = QVBoxLayout(self.banner_instrucoes)
+        lay_ban.setSpacing(4)
         self.lbl_instr_titulo = QLabel("O que preencher neste trabalho")
         self.lbl_instr_titulo.setStyleSheet("font-size: 14px; font-weight: bold; color: #38bdf8;")
         self.lbl_instr_corpo = QLabel("")
         self.lbl_instr_corpo.setWordWrap(True)
         self.lbl_instr_passo = QLabel(
-            "Passo a passo: (1) Preencha o Cabeçalho abaixo → (2) Use Contexto + IA à direita ou preencha manualmente → (3) Clique em 'Gerar DOCX + PDF'."
+            "Fluxo rápido: (1) Preencha o Cabeçalho → (2) Use Contexto + IA ou preencha abaixo → (3) Clique em 'Gerar DOCX + PDF'."
         )
         self.lbl_instr_passo.setWordWrap(True)
-        self.lbl_instr_passo.setStyleSheet("color: #cbd5e1; font-size: 11px; margin-top: 4px;")
+        self.lbl_instr_passo.setStyleSheet("color: #94a3b8; font-size: 11.5px; margin-top: 2px;")
         lay_ban.addWidget(self.lbl_instr_titulo)
         lay_ban.addWidget(self.lbl_instr_corpo)
         lay_ban.addWidget(self.lbl_instr_passo)
         self.lay_form_root.addWidget(self.banner_instrucoes)
 
-        grp_cab = QGroupBox("1. Cabeçalho Obrigatório (Capa e Folha de Rosto)")
-        form_cab = QFormLayout(grp_cab)
-        self.ed_aluno = QLineEdit()
-        self.ed_aluno.setPlaceholderText("Nome completo do(a) aluno(a)")
-        self.ed_curso = QLineEdit()
-        self.ed_curso.setPlaceholderText("Ex.: Curso Avançado em Teologia")
-        self.ed_ano = QLineEdit("2026")
-        self.ed_disciplina = QLineEdit()
-        self.ed_disciplina.setPlaceholderText("Ex.: Apologética, Soteriologia...")
-        self.ed_professor = QLineEdit()
-        self.ed_professor.setPlaceholderText("Nome completo do(a) professor(a)")
-        self.ed_titulo = QLineEdit()
-        self.ed_titulo.setPlaceholderText("Título do trabalho ou nome do livro lido")
-        self.ed_subtitulo = QLineEdit()
-        self.ed_subtitulo.setPlaceholderText("Opcional")
-        self.ed_cidade = QLineEdit(CIDADE_PADRAO)
+        # Card 1: Cabeçalho em Grid 2 colunas (mais compacto e limpo)
+        card_cab, lay_cab = self._criar_card("1. Cabeçalho Obrigatório (Capa e Folha de Rosto)")
+        grid = QGridLayout()
+        grid.setSpacing(8)
 
-        form_cab.addRow("Aluno(a) *:", self.ed_aluno)
-        form_cab.addRow("Curso *:", self.ed_curso)
-        form_cab.addRow("Ano *:", self.ed_ano)
-        form_cab.addRow("Disciplina *:", self.ed_disciplina)
-        form_cab.addRow("Professor(a) *:", self.ed_professor)
-        form_cab.addRow("Título / Obra *:", self.ed_titulo)
-        form_cab.addRow("Subtítulo:", self.ed_subtitulo)
-        form_cab.addRow("Cidade:", self.ed_cidade)
-        self.lay_form_root.addWidget(grp_cab)
+        def mk_field(rotulo: str, placeholder: str = "", default: str = "") -> tuple[QLabel, QLineEdit]:
+            lbl = QLabel(rotulo)
+            lbl.setObjectName("campoRotulo")
+            ed = QLineEdit(default)
+            ed.setPlaceholderText(placeholder)
+            return lbl, ed
 
-        self.grp_corpo = QGroupBox("2. Conteúdo Específico do Trabalho")
-        self.lay_corpo = QVBoxLayout(self.grp_corpo)
-        self.lay_form_root.addWidget(self.grp_corpo)
+        l_aluno, self.ed_aluno = mk_field("Aluno(a) *", "Nome completo do(a) aluno(a)")
+        l_curso, self.ed_curso = mk_field("Curso *", "Ex.: Curso Avançado em Teologia")
+        l_disc, self.ed_disciplina = mk_field("Disciplina *", "Ex.: Apologética, Soteriologia...")
+        l_prof, self.ed_professor = mk_field("Professor(a) *", "Nome completo do(a) professor(a)")
+        l_tit, self.ed_titulo = mk_field("Título / Obra *", "Título do trabalho ou nome do livro")
+        l_sub, self.ed_subtitulo = mk_field("Subtítulo", "Opcional")
+        l_ano, self.ed_ano = mk_field("Ano *", "2026", "2026")
+        l_cid, self.ed_cidade = mk_field("Cidade", "São Luís", CIDADE_PADRAO)
+
+        pares = [
+            (l_aluno, self.ed_aluno, 0, 0),
+            (l_curso, self.ed_curso, 0, 1),
+            (l_disc, self.ed_disciplina, 2, 0),
+            (l_prof, self.ed_professor, 2, 1),
+            (l_tit, self.ed_titulo, 4, 0),
+            (l_sub, self.ed_subtitulo, 4, 1),
+            (l_ano, self.ed_ano, 6, 0),
+            (l_cid, self.ed_cidade, 6, 1),
+        ]
+        for lbl, ed, r, c in pares:
+            grid.addWidget(lbl, r, c)
+            grid.addWidget(ed, r + 1, c)
+
+        lay_cab.addLayout(grid)
+        self.lay_form_root.addWidget(card_cab)
+
+        # Card 2: Conteúdo Dinâmico
+        self.card_corpo, lay_corpo_wrap = self._criar_card("2. Conteúdo Específico do Trabalho")
+        self.lbl_corpo_titulo = self.card_corpo.findChild(QLabel, "cardTitulo")
+        self.lay_corpo = QVBoxLayout()
+        self.lay_corpo.setSpacing(8)
+        lay_corpo_wrap.addLayout(self.lay_corpo)
+        self.lay_form_root.addWidget(self.card_corpo)
         self.lay_form_root.addStretch()
 
         scroll.setWidget(cont)
         return scroll
 
     def _criar_painel_ia(self) -> QWidget:
-        w = QWidget()
-        w.setObjectName("painelIA")
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(6, 6, 6, 6)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumWidth(300)
+        cont = QWidget()
+        cont.setObjectName("conteudoIA")
+        lay = QVBoxLayout(cont)
+        lay.setContentsMargins(12, 14, 12, 14)
+        lay.setSpacing(10)
 
-        grp_cfg = QGroupBox("Configuração de IA (Opcional — ou use Copiar Prompt)")
-        fc = QFormLayout(grp_cfg)
+        # Botão retrátil para Configurações de IA (economiza espaço na tela!)
+        self.btn_toggle_cfg = QPushButton("⚙ Configurar Provedor / Modelo de IA  ▾")
+        self.btn_toggle_cfg.setCheckable(True)
+        self.btn_toggle_cfg.setChecked(True)
+        lay.addWidget(self.btn_toggle_cfg)
+
+        self.card_cfg, lay_cfg = self._criar_card("Provedor e Modelo de IA")
+        grid_cfg = QGridLayout()
+        grid_cfg.setSpacing(6)
+
         self.cb_provedor = QComboBox()
         self.cb_provedor.addItems(["Gemini", "OpenAI", "Ollama"])
         self.cb_modelo_ia = QComboBox()
         self.cb_modelo_ia.setEditable(True)
         self.cb_modelo_ia.addItems(MODELOS_POR_PROVEDOR["Gemini"])
-        btn_buscar_mod = QPushButton("Buscar da API")
-        btn_buscar_mod.setToolTip("Consulta os modelos disponíveis na sua conta/API ou Ollama local")
+        btn_buscar_mod = QPushButton("Buscar")
+        btn_buscar_mod.setToolTip("Consulta os modelos disponíveis na sua API ou Ollama")
         btn_buscar_mod.clicked.connect(self._buscar_modelos_ia)
+
         h_mod = QHBoxLayout()
         h_mod.addWidget(self.cb_modelo_ia, stretch=1)
         h_mod.addWidget(btn_buscar_mod)
@@ -619,46 +674,66 @@ class ScenApp(QMainWindow):
         self.ed_api_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.ed_api_key.setPlaceholderText("Chave API (não precisa para Ollama)")
         self.ed_base_url = QLineEdit()
-        self.ed_base_url.setPlaceholderText("Opcional (Ollama/OpenAI compatível)")
+        self.ed_base_url.setPlaceholderText("URL opcional (Ollama/OpenAI)")
         self.cb_provedor.currentTextChanged.connect(self._on_provedor_mudou)
 
-        fc.addRow("Provedor:", self.cb_provedor)
-        fc.addRow("Modelo:", h_mod)
-        fc.addRow("API Key:", self.ed_api_key)
-        fc.addRow("Base URL:", self.ed_base_url)
-        lay.addWidget(grp_cfg)
+        grid_cfg.addWidget(QLabel("Provedor:"), 0, 0)
+        grid_cfg.addWidget(self.cb_provedor, 0, 1)
+        grid_cfg.addWidget(QLabel("Modelo:"), 1, 0)
+        grid_cfg.addLayout(h_mod, 1, 1)
+        grid_cfg.addWidget(QLabel("API Key:"), 2, 0)
+        grid_cfg.addWidget(self.ed_api_key, 2, 1)
+        grid_cfg.addWidget(QLabel("Base URL:"), 3, 0)
+        grid_cfg.addWidget(self.ed_base_url, 3, 1)
+        lay_cfg.addLayout(grid_cfg)
+        lay.addWidget(self.card_cfg)
 
-        grp_ctx = QGroupBox("Contexto, Anexos e Comandos para IA")
-        lctx = QVBoxLayout(grp_ctx)
+        def toggle_cfg() -> None:
+            vis = self.btn_toggle_cfg.isChecked()
+            self.card_cfg.setVisible(vis)
+            self.btn_toggle_cfg.setText(
+                "⚙ Configurar Provedor / Modelo de IA  ▾" if vis else "⚙ Configurar Provedor / Modelo de IA  ▸"
+            )
+
+        self.btn_toggle_cfg.clicked.connect(toggle_cfg)
+
+        # Card de Contexto, Anexos e Comandos
+        card_ctx, lctx = self._criar_card("Contexto, Anexos & Comandos IA")
 
         h_anexos = QHBoxLayout()
-        btn_anexar = QPushButton("+ Anexar PDF / DOCX / TXT")
+        btn_anexar = QPushButton("+ Anexar PDF/DOCX/TXT")
         btn_anexar.clicked.connect(self._anexar_arquivos)
         btn_limpar_anexos = QPushButton("Limpar")
         btn_limpar_anexos.clicked.connect(self._limpar_anexos)
-        h_anexos.addWidget(btn_anexar)
+        h_anexos.addWidget(btn_anexar, stretch=1)
         h_anexos.addWidget(btn_limpar_anexos)
         lctx.addLayout(h_anexos)
 
         self.lista_anexos = QListWidget()
-        self.lista_anexos.setMaximumHeight(75)
+        self.lista_anexos.setMaximumHeight(68)
         lctx.addWidget(self.lista_anexos)
 
-        lctx.addWidget(QLabel("Notas / Texto de Contexto:"))
+        lbl_ctx = QLabel("Notas / Texto de Contexto:")
+        lbl_ctx.setObjectName("campoRotulo")
+        lctx.addWidget(lbl_ctx)
         self.ed_contexto = QPlainTextEdit()
-        self.ed_contexto.setPlaceholderText("Cole aqui resumos, trechos do livro, esboço ou anotações de aula...")
-        lctx.addWidget(self.ed_contexto, stretch=2)
+        self.ed_contexto.setMinimumHeight(110)
+        self.ed_contexto.setPlaceholderText("Cole resumos, trechos do livro, esboço ou anotações...")
+        lctx.addWidget(self.ed_contexto)
 
-        lctx.addWidget(QLabel("Comando / Instrução para a IA:"))
+        lbl_cmd = QLabel("Comando / Instrução para a IA:")
+        lbl_cmd.setObjectName("campoRotulo")
+        lctx.addWidget(lbl_cmd)
         self.ed_comando = QPlainTextEdit()
-        self.ed_comando.setMaximumHeight(80)
-        self.ed_comando.setPlaceholderText("Ex.: Preencha as 7 perguntas em tom acadêmico teológico e aplique ao ministério infantil.")
+        self.ed_comando.setMinimumHeight(75)
+        self.ed_comando.setMaximumHeight(110)
+        self.ed_comando.setPlaceholderText("Ex.: Preencha em tom teológico reformado com aplicação ministerial.")
         lctx.addWidget(self.ed_comando)
 
         h_chips = QHBoxLayout()
         for rotulo, cmd in [
             ("Acadêmico", "Escreva em português acadêmico claro e bem fundamentado."),
-            ("Aplicação Ministerial", "Dê ênfase prática à aplicação pastoral e de EBD."),
+            ("Ministerial", "Dê ênfase prática à aplicação pastoral e de EBD."),
             ("Conciso", "Seja objetivo e direto nos parágrafos."),
         ]:
             b = QPushButton(rotulo)
@@ -666,11 +741,11 @@ class ScenApp(QMainWindow):
             h_chips.addWidget(b)
         lctx.addLayout(h_chips)
 
-        self.chk_preservar = QCheckBox("Manter campos já preenchidos no formulário")
+        self.chk_preservar = QCheckBox("Manter campos já preenchidos")
         self.chk_preservar.setChecked(True)
         lctx.addWidget(self.chk_preservar)
 
-        self.btn_completar_ia = QPushButton("Completar com IA")
+        self.btn_completar_ia = QPushButton("✨ Completar com IA")
         self.btn_completar_ia.setObjectName("btnIA")
         self.btn_completar_ia.clicked.connect(self._executar_ia)
         lctx.addWidget(self.btn_completar_ia)
@@ -684,8 +759,10 @@ class ScenApp(QMainWindow):
         h_manual.addWidget(btn_colar_json)
         lctx.addLayout(h_manual)
 
-        lay.addWidget(grp_ctx, stretch=1)
-        return w
+        lay.addWidget(card_ctx)
+        lay.addStretch()
+        scroll.setWidget(cont)
+        return scroll
 
     def _on_provedor_mudou(self, texto: str) -> None:
         self.cb_modelo_ia.clear()
@@ -714,10 +791,14 @@ class ScenApp(QMainWindow):
     def _on_atalho_clicado(self, item: QListWidgetItem) -> None:
         tipo, pre = item.data(Qt.ItemDataRole.UserRole)
         self._selecionar_tipo(tipo, pre)
+        if self.modo_atual == "abas":
+            self.tabs.setCurrentIndex(1)
 
     def _on_modelo_clicado(self, item: QListWidgetItem) -> None:
         tipo = item.data(Qt.ItemDataRole.UserRole)
         self._selecionar_tipo(tipo)
+        if self.modo_atual == "abas":
+            self.tabs.setCurrentIndex(1)
 
     def _limpar_layout_corpo(self) -> None:
         while self.lay_corpo.count():
@@ -752,10 +833,16 @@ class ScenApp(QMainWindow):
             if "subtitulo" in prefill:
                 self.ed_subtitulo.setText(prefill["subtitulo"])
 
-        self.grp_corpo.setTitle(f"2. Conteúdo Específico — {titulo_instr}")
+        if self.lbl_corpo_titulo:
+            self.lbl_corpo_titulo.setText(f"2. Conteúdo Específico — {titulo_instr}")
+
+        def add_label(rotulo: str) -> None:
+            lbl = QLabel(rotulo)
+            lbl.setObjectName("campoRotulo")
+            self.lay_corpo.addWidget(lbl)
 
         def add_line(chave: str, rotulo: str, placeholder: str = "") -> QLineEdit:
-            self.lay_corpo.addWidget(QLabel(rotulo))
+            add_label(rotulo)
             ed = QLineEdit()
             ed.setPlaceholderText(placeholder)
             self.lay_corpo.addWidget(ed)
@@ -763,7 +850,7 @@ class ScenApp(QMainWindow):
             return ed
 
         def add_text(chave: str, rotulo: str, altura: int = 85) -> QPlainTextEdit:
-            self.lay_corpo.addWidget(QLabel(rotulo))
+            add_label(rotulo)
             ed = QPlainTextEdit()
             ed.setMinimumHeight(altura)
             self.lay_corpo.addWidget(ed)
@@ -772,7 +859,7 @@ class ScenApp(QMainWindow):
 
         if tipo == "declaracao_atual":
             add_line("referencia_abnt", "Referência ABNT da obra *:", "SOBRENOME, Nome. Título. Cidade: Editora, Ano.")
-            self.lay_corpo.addWidget(QLabel("Cronograma de Leitura *:"))
+            add_label("Cronograma de Leitura *:")
             tab = QTableWidget(3, 4)
             tab.setHorizontalHeaderLabels(["Seção", "Título", "Datas", "Horas"])
             tab.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -780,7 +867,7 @@ class ScenApp(QMainWindow):
             self.lay_corpo.addWidget(tab)
             self.campos_dinamicos["cronograma"] = tab
             hb = QHBoxLayout()
-            b_add = QPushButton("+ Linha")
+            b_add = QPushButton("+ Adicionar Linha")
             b_add.clicked.connect(lambda: tab.insertRow(tab.rowCount()))
             b_rem = QPushButton("- Remover Linha")
             b_rem.clicked.connect(lambda: tab.removeRow(tab.currentRow()) if tab.currentRow() >= 0 else None)
@@ -814,7 +901,7 @@ class ScenApp(QMainWindow):
             add_text(
                 "secoes_texto",
                 "Seções (use '## Título da Seção' em uma linha e os parágrafos abaixo):",
-                240,
+                220,
             ).setPlainText("## 1 INTRODUÇÃO\n\n## 2 DESENVOLVIMENTO\n\n## 3 CONCLUSÃO\n")
             add_text("referencias_texto", "Referências ABNT (uma por linha):", 90)
 
@@ -825,7 +912,7 @@ class ScenApp(QMainWindow):
                     "Passo 1 — Delimitação da Perícope e Contexto",
                     "Passo 2 — Crítica Textual e Tradução Literal",
                     "Passo 3 — Análise Gramatical, Sintática e Léxica",
-                    "Passo 4 — Análise EstrUTural e Literária".replace("EstrUTural", "Estrutural"),
+                    "Passo 4 — Análise Estrutural e Literária",
                     "Passo 5 — Contexto Teológico e Bíblico",
                     "Passo 6 — Ideia Central Exegética",
                     "Passo 7 — Aplicação Contemporânea e Homilética",
@@ -853,7 +940,7 @@ class ScenApp(QMainWindow):
             add_text(
                 "fichas_texto",
                 "Fichas (use '## Cabeçalho da Ficha' e o conteúdo abaixo):",
-                220,
+                210,
             ).setPlainText("## Ficha 1 — Capítulo 1\n")
 
         elif tipo == "resumo":
@@ -870,7 +957,7 @@ class ScenApp(QMainWindow):
 
         elif tipo == "resenha":
             add_line("referencia_abnt", "Referência ABNT da obra *:")
-            add_text("paragrafos_texto", "Parágrafos da Resenha (separe por linha em branco):", 240)
+            add_text("paragrafos_texto", "Parágrafos da Resenha (separe por linha em branco):", 220)
 
         self.lbl_status.setText(f"Modelo ativo: {titulo_instr}")
 
