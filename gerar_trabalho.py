@@ -462,6 +462,89 @@ def construir_paper_check(doc: docx.Document, dados: dict[str, Any]) -> None:
     _add_referencias(doc, refs)
 
 
+def _add_numero_pagina_cabecalho(section: docx.section.Section) -> None:
+    """Adiciona campo PAGE no canto superior direito do cabeçalho (ABNT NBR 14724, 5.3)."""
+    header = section.header
+    header.is_linked_to_previous = False
+    p = header.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    run = p.add_run()
+    run.font.name = "Times New Roman"
+    run.font.size = Pt(10)
+    fld_begin = OxmlElement("w:fldChar")
+    fld_begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = " PAGE "
+    fld_sep = OxmlElement("w:fldChar")
+    fld_sep.set(qn("w:fldCharType"), "separate")
+    fld_end = OxmlElement("w:fldChar")
+    fld_end.set(qn("w:fldCharType"), "end")
+    run._r.append(fld_begin)
+    run._r.append(instr)
+    run._r.append(fld_sep)
+    run._r.append(fld_end)
+
+
+def construir_paper_nbr14724(doc: docx.Document, dados: dict[str, Any]) -> None:
+    """Construtor estritamente conforme ABNT NBR 14724 (Capa, Folha de Rosto, Resumo, Sumário, Texto paginado, Referências)."""
+    from docx.enum.section import WD_SECTION
+
+    sec = doc.sections[0]
+    sec.top_margin = Cm(3.0)
+    sec.left_margin = Cm(3.0)
+    sec.bottom_margin = Cm(2.0)
+    sec.right_margin = Cm(2.0)
+    sec.header_distance = Cm(2.0)
+
+    disciplina = dados.get("disciplina", "{{DISCIPLINA}}")
+    curso = dados.get("curso", "{{CURSO}}")
+    resumo = dados.get("resumo", "")
+    palavras_chave = dados.get("palavras_chave", "")
+    secoes = dados.get("secoes", [])
+    refs = dados.get("referencias", [])
+
+    natureza = (
+        f"Trabalho acadêmico apresentado à disciplina {disciplina} do {curso} do "
+        "Seminário Cristão Evangélico do Norte, como requisito parcial de avaliação."
+    )
+    _add_capa_e_folha_rosto(doc, dados, natureza)
+
+    # RESUMO (NBR 6028)
+    _add_p(doc, "RESUMO", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, space_after=12)
+    _add_p(doc, resumo, align=WD_ALIGN_PARAGRAPH.JUSTIFY, line_spacing=1.5, space_after=12)
+    _add_p(doc, f"Palavras-chave: {palavras_chave}.", align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.5)
+    doc.add_page_break()
+
+    # SUMÁRIO (NBR 6027)
+    _add_p(doc, "SUMÁRIO", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, space_after=12)
+    for s in secoes:
+        t = s["titulo"]
+        eh_primaria = "." not in t.split(" ", 1)[0]
+        _add_p(
+            doc,
+            t,
+            align=WD_ALIGN_PARAGRAPH.LEFT,
+            bold=eh_primaria,
+            line_spacing=1.5,
+            left_indent=0.0 if eh_primaria else 0.8,
+            space_after=4,
+        )
+    _add_p(doc, "REFERÊNCIAS", align=WD_ALIGN_PARAGRAPH.LEFT, bold=True, line_spacing=1.5, space_after=4)
+
+    # Nova seção para parte textual com paginação visível (ABNT NBR 14724, 5.3)
+    sec_txt = doc.add_section(WD_SECTION.NEW_PAGE)
+    sec_txt.top_margin = Cm(3.0)
+    sec_txt.left_margin = Cm(3.0)
+    sec_txt.bottom_margin = Cm(2.0)
+    sec_txt.right_margin = Cm(2.0)
+    sec_txt.header_distance = Cm(2.0)
+    _add_numero_pagina_cabecalho(sec_txt)
+
+    _add_secoes(doc, secoes, recuo_cm=1.5, space_after_body=0)
+    _add_referencias(doc, refs)
+
+
 def construir_exegese_nt(doc: docx.Document, dados: dict[str, Any]) -> None:
     disciplina = dados.get("disciplina", "Exegese do Novo Testamento")
     curso = dados.get("curso", "{{CURSO}}")
@@ -695,6 +778,25 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
         secoes = dados.get("secoes", [])
         refs = dados.get("referencias", [])
         corpo = f'{_render_secoes_html(secoes, recuo_class="recuo-abnt")}{_render_refs_html(refs)}'
+    elif tipo == "paper_nbr14724":
+        nat = (
+            f"Trabalho acadêmico apresentado à disciplina {disciplina} do {curso} do "
+            "Seminário Cristão Evangélico do Norte, como requisito parcial de avaliação."
+        )
+        secoes = dados.get("secoes", [])
+        refs = dados.get("referencias", [])
+        sumario_itens = "\n".join(
+            f'<p style="margin:0 0 4pt {"0" if "." not in s["titulo"].split(" ", 1)[0] else "0.8cm"};font-weight:{"bold" if "." not in s["titulo"].split(" ", 1)[0] else "normal"};">{_esc(s["titulo"])}</p>'
+            for s in secoes
+        )
+        corpo = (
+            f'<section class="page-break"><h2 class="center bold">RESUMO</h2>'
+            f'<p>{_esc(dados.get("resumo", ""))}</p>'
+            f'<p>Palavras-chave: {_esc(dados.get("palavras_chave", ""))}.</p></section>'
+            f'<section class="page-break"><h2 class="center bold">SUMÁRIO</h2>{sumario_itens}'
+            f'<p style="font-weight:bold;">REFERÊNCIAS</p></section>'
+            f'{_render_secoes_html(secoes, recuo_class="recuo")}{_render_refs_html(refs)}'
+        )
     elif tipo == "exegese_nt":
         nat = f"Trabalho exegético apresentado para aprovação na disciplina {dados.get('disciplina', 'Exegese do Novo Testamento')} do Seminário Cristão Evangélico do Norte, no {curso}."
         passagem = dados.get("passagem", "{{LIVRO CAPITULO:VERSICULOS}}")
@@ -828,6 +930,7 @@ CONSTRUTORES = {
     "relatorio_leitura": ("03_Relatorio_de_Leitura", construir_relatorio_leitura),
     "paper": ("04_Paper", construir_paper),
     "paper_check": ("13_Paper_Check_ABNT", construir_paper_check),
+    "paper_nbr14724": ("14_Paper_ABNT_NBR_14724", construir_paper_nbr14724),
     "exegese_nt": ("05_Exegese_Novo_Testamento_7_Passos", construir_exegese_nt),
     "sermao_narrativa": ("06_Sermao_Narrativa", lambda d, p: construir_sermao(d, p, "Narrativa")),
     "sermao_evangelho": ("07_Sermao_Evangelho", lambda d, p: construir_sermao(d, p, "Evangelho")),
@@ -886,6 +989,16 @@ DADOS_ESSENCIAIS_TEMPLATE: dict[str, dict[str, Any]] = {
             {"titulo": "6.2 Objetivos Específicos", "paragrafos": [""]},
             {"titulo": "7 REFERENCIAL TEÓRICO", "paragrafos": [""]},
             {"titulo": "8 METODOLOGIA", "paragrafos": [""]},
+        ],
+        "referencias": [""],
+    },
+    "paper_nbr14724": {
+        "aluno": "", "curso": "", "ano": "2026", "disciplina": "", "professor": "",
+        "titulo": "", "subtitulo": "", "resumo": "", "palavras_chave": "",
+        "secoes": [
+            {"titulo": "1 INTRODUÇÃO", "paragrafos": [""]},
+            {"titulo": "2 DESENVOLVIMENTO", "paragrafos": [""]},
+            {"titulo": "3 CONCLUSÃO", "paragrafos": [""]},
         ],
         "referencias": [""],
     },
