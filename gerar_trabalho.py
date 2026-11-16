@@ -51,20 +51,20 @@ CIDADE_PADRAO = "São Luís"
 
 
 def _configurar_documento() -> docx.Document:
-    """Cria um documento A4 com margens (2,54 cm) e fonte Times New Roman 12 extraídas dos modelos base."""
+    """Cria um documento A4 com margens SCEN 2025 (3 cm sup/esq, 2 cm inf/dir) e fonte Arial 12."""
     doc = docx.Document()
     sec = doc.sections[0]
-    sec.page_width = Cm(21.01)
-    sec.page_height = Cm(29.69)
-    sec.top_margin = Cm(2.54)
-    sec.bottom_margin = Cm(2.54)
-    sec.left_margin = Cm(2.54)
-    sec.right_margin = Cm(2.54)
-    sec.header_distance = Cm(1.27)
-    sec.footer_distance = Cm(1.27)
+    sec.page_width = Cm(21.0)
+    sec.page_height = Cm(29.7)
+    sec.top_margin = Cm(3.0)
+    sec.bottom_margin = Cm(2.0)
+    sec.left_margin = Cm(3.0)
+    sec.right_margin = Cm(2.0)
+    sec.header_distance = Cm(2.0)
+    sec.footer_distance = Cm(2.0)
 
     normal = doc.styles["Normal"]
-    normal.font.name = "Times New Roman"
+    normal.font.name = "Arial"
     normal.font.size = Pt(12)
     normal.paragraph_format.line_spacing = 1.5
     normal.paragraph_format.space_before = Pt(0)
@@ -100,7 +100,7 @@ def _add_p(
 
     if texto:
         run = p.add_run(texto)
-        run.font.name = "Times New Roman"
+        run.font.name = "Arial"
         run.font.size = Pt(size)
         run.bold = bold
         run.italic = italic
@@ -216,18 +216,44 @@ def _format_cell(
     p.paragraph_format.space_before = Pt(2)
     p.paragraph_format.space_after = Pt(2)
     run = p.add_run(texto)
-    run.font.name = "Times New Roman"
+    run.font.name = "Arial"
     run.font.size = Pt(12)
     run.bold = bold
 
 
+def _render_ref_runs(p: docx.text.paragraph.Paragraph, ref: str) -> None:
+    """Renderiza referência ABNT com título em negrito (suporta **texto** ou auto-detecção após o autor)."""
+    if "**" in ref:
+        partes = ref.split("**")
+        for idx, parte in enumerate(partes):
+            if parte:
+                r = p.add_run(parte)
+                r.font.name = "Arial"
+                r.font.size = Pt(12)
+                r.bold = (idx % 2 == 1)
+        return
+    # Auto-negrito no título (segundo segmento separado por '. ') quando não há ** explícito
+    m = re.match(r"^([^.]+\.(?:\s*[A-Z]\.)*\s*)([^.]+)(\..*)$", ref)
+    if m and len(m.group(2).strip()) > 3:
+        for txt, bld in [(m.group(1), False), (m.group(2), True), (m.group(3), False)]:
+            r = p.add_run(txt)
+            r.font.name = "Arial"
+            r.font.size = Pt(12)
+            r.bold = bld
+    else:
+        r = p.add_run(ref)
+        r.font.name = "Arial"
+        r.font.size = Pt(12)
+
+
 def _add_referencias(doc: docx.Document, refs: list[str]) -> None:
-    """Adiciona seção REFERÊNCIAS no padrão ABNT/SCEN."""
+    """Adiciona seção REFERÊNCIAS no padrão SCEN 2025 / ABNT NBR 6023 (títulos em negrito, alinhada à esquerda)."""
     doc.add_page_break()
     _add_p(doc, "REFERÊNCIAS", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
-    _add_linhas_vazias(doc, 1)
+    _add_linhas_vazias(doc, 1, line_spacing=1.0)
     for ref in refs:
-        _add_p(doc, ref, align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.0, space_after=12)
+        p = _add_p(doc, "", align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.0, space_after=12)
+        _render_ref_runs(p, ref)
 
 
 def _add_secoes(
@@ -236,12 +262,17 @@ def _add_secoes(
     *,
     recuo_cm: float = 1.5,
     space_after_body: float = 6,
+    quebra_secao_primaria: bool = False,
 ) -> None:
-    """Adiciona seções numeradas com suporte a parágrafos normais e citações diretas longas (>3 linhas)."""
-    for sec in secoes:
+    """Adiciona seções numeradas com suporte a quebra de página em seções primárias e citações longas."""
+    for idx_sec, sec in enumerate(secoes):
+        titulo = sec["titulo"]
+        eh_primaria = "." not in titulo.split(" ", 1)[0]
+        if quebra_secao_primaria and eh_primaria and idx_sec > 0:
+            doc.add_page_break()
         _add_p(
             doc,
-            sec["titulo"],
+            titulo,
             align=WD_ALIGN_PARAGRAPH.LEFT,
             bold=True,
             space_before=12,
@@ -423,8 +454,11 @@ def construir_relatorio_leitura(doc: docx.Document, dados: dict[str, Any]) -> No
 
 
 def construir_paper(doc: docx.Document, dados: dict[str, Any]) -> None:
+    """Construtor padrão SCEN 2025 para Paper (Capa, Folha de Rosto, Cabeçalho, SINOPSE, Seções em nova página, Referências)."""
     disciplina = dados.get("disciplina", "{{DISCIPLINA}}")
     curso = dados.get("curso", "{{CURSO}}")
+    aluno = dados.get("aluno", "{{NOME_DO_ALUNO}}")
+    instituicao = dados.get("instituicao", INSTITUICAO_PADRAO)
     sinopse = dados.get("sinopse", "{{TEXTO_DA_SINOPSE}}")
     secoes = dados.get(
         "secoes",
@@ -438,8 +472,12 @@ def construir_paper(doc: docx.Document, dados: dict[str, Any]) -> None:
 
     natureza = f"Paper apresentado para aprovação na disciplina {disciplina} do Seminário Cristão Evangélico do Norte, no {curso}."
     _add_capa_e_folha_rosto(doc, dados, natureza)
+    _add_p(doc, _titulo_completo(dados), align=WD_ALIGN_PARAGRAPH.LEFT, bold=True, space_after=6)
+    _add_p(doc, instituicao.title() if instituicao.isupper() else instituicao, align=WD_ALIGN_PARAGRAPH.RIGHT)
+    _add_p(doc, aluno, align=WD_ALIGN_PARAGRAPH.RIGHT, space_after=12)
     _add_p(doc, f"SINOPSE: {sinopse}", align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_after=12)
-    _add_secoes(doc, secoes)
+    doc.add_page_break()
+    _add_secoes(doc, secoes, recuo_cm=1.5, space_after_body=0, quebra_secao_primaria=True)
     _add_referencias(doc, refs)
 
 
@@ -692,10 +730,17 @@ def _render_capa_e_folha_html(dados: dict[str, Any], natureza: str) -> str:
     """
 
 
-def _render_secoes_html(secoes: list[dict[str, Any]], recuo_class: str = "recuo") -> str:
+def _render_secoes_html(
+    secoes: list[dict[str, Any]],
+    recuo_class: str = "recuo",
+    quebra_secao_primaria: bool = False,
+) -> str:
     partes: list[str] = []
-    for sec in secoes:
-        partes.append(f'<h2 class="sec-titulo">{_esc(sec["titulo"])}</h2>')
+    for idx_sec, sec in enumerate(secoes):
+        titulo = sec["titulo"]
+        eh_primaria = "." not in titulo.split(" ", 1)[0]
+        cls = "sec-titulo page-break-before" if (quebra_secao_primaria and eh_primaria and idx_sec > 0) else "sec-titulo"
+        partes.append(f'<h2 class="{cls}">{_esc(titulo)}</h2>')
         for p in sec.get("paragrafos", [sec.get("conteudo", "")]):
             if not p:
                 continue
@@ -706,8 +751,18 @@ def _render_secoes_html(secoes: list[dict[str, Any]], recuo_class: str = "recuo"
     return "\n".join(partes)
 
 
+def _formatar_ref_html(ref: str) -> str:
+    if "**" in ref:
+        partes = ref.split("**")
+        return "".join(f"<strong>{_esc(p)}</strong>" if i % 2 == 1 else _esc(p) for i, p in enumerate(partes) if p)
+    m = re.match(r"^([^.]+\.(?:\s*[A-Z]\.)*\s*)([^.]+)(\..*)$", ref)
+    if m and len(m.group(2).strip()) > 3:
+        return f"{_esc(m.group(1))}<strong>{_esc(m.group(2))}</strong>{_esc(m.group(3))}"
+    return _esc(ref)
+
+
 def _render_refs_html(refs: list[str]) -> str:
-    itens = "\n".join(f'<p class="ref">{_esc(r)}</p>' for r in refs)
+    itens = "\n".join(f'<p class="ref">{_formatar_ref_html(r)}</p>' for r in refs)
     return f"""
     <section class="page-break-before">
       <h2 class="center bold">REFERÊNCIAS</h2>
@@ -772,7 +827,16 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
             {"titulo": "3 CONCLUSÃO", "paragrafos": ["{{TEXTO_CONCLUSAO}}"]},
         ])
         refs = dados.get("referencias", ["{{SOBRENOME, Nome. Título da obra. Cidade: Editora, Ano.}}"])
-        corpo = f'<p><strong>SINOPSE:</strong> {_esc(dados.get("sinopse", "{{TEXTO_DA_SINOPSE}}"))}</p>{_render_secoes_html(secoes)}{_render_refs_html(refs)}'
+        inst = _esc(dados.get("instituicao", INSTITUICAO_PADRAO).title())
+        aluno = _esc(dados.get("aluno", "{{NOME_DO_ALUNO}}"))
+        corpo = (
+            f'<section class="page-break">'
+            f'<p class="bold" style="text-align:left;">{_esc(livro)}</p>'
+            f'<p class="right">{inst}<br/>{aluno}</p>'
+            f'<p class="mt-2"><strong>SINOPSE:</strong> {_esc(dados.get("sinopse", "{{TEXTO_DA_SINOPSE}}"))}</p>'
+            f'</section>'
+            f'{_render_secoes_html(secoes, quebra_secao_primaria=True)}{_render_refs_html(refs)}'
+        )
     elif tipo == "paper_check":
         nat = f"Paper apresentado para aprovação na disciplina {disciplina} do Seminário Cristão Evangélico do Norte, no {curso}."
         secoes = dados.get("secoes", [])
@@ -856,10 +920,10 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
 <style>
   @page {{
     size: A4;
-    margin: 2.54cm 2.54cm 2.54cm 2.54cm;
+    margin: 3cm 2cm 2cm 3cm;
   }}
   body {{
-    font-family: "Times New Roman", "Liberation Serif", Times, serif;
+    font-family: Arial, "Liberation Sans", sans-serif;
     font-size: 12pt;
     line-height: 1.5;
     color: #000;
@@ -1046,18 +1110,18 @@ def _gerar_pdf_reportlab(tipo: str, dados: dict[str, Any], caminho_pdf: Path) ->
     doc_pdf = SimpleDocTemplate(
         str(caminho_pdf),
         pagesize=A4,
-        topMargin=2.54 * cm,
-        bottomMargin=2.54 * cm,
-        leftMargin=2.54 * cm,
-        rightMargin=2.54 * cm,
+        topMargin=3.0 * cm,
+        bottomMargin=2.0 * cm,
+        leftMargin=3.0 * cm,
+        rightMargin=2.0 * cm,
     )
-    st_center = ParagraphStyle("center", fontName="Times-Roman", fontSize=12, leading=18, alignment=TA_CENTER)
-    st_center_b = ParagraphStyle("center_b", parent=st_center, fontName="Times-Bold")
-    st_body = ParagraphStyle("body", fontName="Times-Roman", fontSize=12, leading=18, alignment=TA_JUSTIFY, firstLineIndent=1.5 * cm, spaceAfter=6)
-    st_left = ParagraphStyle("left", fontName="Times-Roman", fontSize=12, leading=16, alignment=TA_LEFT, spaceAfter=6)
-    st_sec = ParagraphStyle("sec", fontName="Times-Bold", fontSize=12, leading=18, alignment=TA_LEFT, spaceBefore=8, spaceAfter=4)
-    st_nat = ParagraphStyle("nat", fontName="Times-Roman", fontSize=10, leading=13, alignment=TA_JUSTIFY, leftIndent=8.0 * cm, spaceAfter=4)
-    st_right = ParagraphStyle("right", fontName="Times-Roman", fontSize=12, leading=18, alignment=TA_RIGHT, spaceBefore=12)
+    st_center = ParagraphStyle("center", fontName="Helvetica", fontSize=12, leading=18, alignment=TA_CENTER)
+    st_center_b = ParagraphStyle("center_b", parent=st_center, fontName="Helvetica-Bold")
+    st_body = ParagraphStyle("body", fontName="Helvetica", fontSize=12, leading=18, alignment=TA_JUSTIFY, firstLineIndent=1.5 * cm, spaceAfter=6)
+    st_left = ParagraphStyle("left", fontName="Helvetica", fontSize=12, leading=16, alignment=TA_LEFT, spaceAfter=6)
+    st_sec = ParagraphStyle("sec", fontName="Helvetica-Bold", fontSize=12, leading=18, alignment=TA_LEFT, spaceBefore=8, spaceAfter=4)
+    st_nat = ParagraphStyle("nat", fontName="Helvetica", fontSize=10, leading=13, alignment=TA_JUSTIFY, leftIndent=7.5 * cm, spaceAfter=4)
+    st_right = ParagraphStyle("right", fontName="Helvetica", fontSize=12, leading=18, alignment=TA_RIGHT, spaceBefore=12)
 
     inst = _esc(dados.get("instituicao", INSTITUICAO_PADRAO).upper())
     aluno = _esc(dados.get("aluno", "{{NOME_DO_ALUNO}}"))
