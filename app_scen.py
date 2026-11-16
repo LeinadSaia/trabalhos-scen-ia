@@ -634,6 +634,17 @@ class ScenApp(QMainWindow):
             grid.addWidget(ed, r + 1, c)
 
         lay_cab.addLayout(grid)
+
+        h_padrao = QHBoxLayout()
+        self.chk_padrao_cabecalho = QCheckBox("Usar Aluno e Curso como padrão ao abrir")
+        self.chk_padrao_cabecalho.setChecked(True)
+        btn_salvar_padrao = QPushButton("Salvar Nome e Curso Padrão")
+        btn_salvar_padrao.clicked.connect(self._salvar_padrao_cabecalho)
+        h_padrao.addWidget(self.chk_padrao_cabecalho)
+        h_padrao.addStretch()
+        h_padrao.addWidget(btn_salvar_padrao)
+        lay_cab.addLayout(h_padrao)
+
         self.lay_form_root.addWidget(card_cab)
 
         # Card 2: Conteúdo Dinâmico
@@ -1313,6 +1324,8 @@ class ScenApp(QMainWindow):
         QMessageBox.critical(self, "Erro na chamada de IA", erro)
 
     def _gerar_arquivos(self) -> None:
+        if self.chk_padrao_cabecalho.isChecked():
+            self._salvar_config()
         dados = self._coletar_dados()
         slug = (dados.get("titulo") or self.tipo_atual).strip().replace(" ", "_")
         slug = "".join(c for c in slug if c.isalnum() or c in "_-") or self.tipo_atual
@@ -1357,14 +1370,23 @@ class ScenApp(QMainWindow):
         else:
             subprocess.Popen(["xdg-open", str(GERADOS_DIR)])
 
+    def _salvar_padrao_cabecalho(self) -> None:
+        self.chk_padrao_cabecalho.setChecked(True)
+        self._salvar_config()
+        self.lbl_status.setText("Aluno(a) e Curso salvos como padrão!")
+
     def _salvar_config(self) -> None:
+        usar_padrao = self.chk_padrao_cabecalho.isChecked()
         cfg = {
             "provedor": self.cb_provedor.currentText(),
             "modelo": self.cb_modelo_ia.currentText().strip(),
             "api_key": self.ed_api_key.text().strip(),
             "base_url": self.ed_base_url.text().strip(),
+            "usar_padrao_cabecalho": usar_padrao,
+            "aluno_padrao": self.ed_aluno.text().strip() if usar_padrao else "",
+            "curso_padrao": self.ed_curso.text().strip() if usar_padrao else "",
         }
-        CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _carregar_config(self) -> None:
         if CONFIG_PATH.exists():
@@ -1373,6 +1395,13 @@ class ScenApp(QMainWindow):
             self.cb_modelo_ia.setCurrentText(cfg.get("modelo", "gemini-4-carbon"))
             self.ed_api_key.setText(cfg.get("api_key", ""))
             self.ed_base_url.setText(cfg.get("base_url", ""))
+            usar_padrao = cfg.get("usar_padrao_cabecalho", True)
+            self.chk_padrao_cabecalho.setChecked(usar_padrao)
+            if usar_padrao:
+                if cfg.get("aluno_padrao"):
+                    self.ed_aluno.setText(cfg["aluno_padrao"])
+                if cfg.get("curso_padrao"):
+                    self.ed_curso.setText(cfg["curso_padrao"])
 
 
 def main() -> None:
