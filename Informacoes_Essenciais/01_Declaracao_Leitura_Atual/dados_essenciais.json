@@ -1,0 +1,18 @@
+{
+  "aluno": "",
+  "curso": "",
+  "ano": "2026",
+  "disciplina": "",
+  "professor": "",
+  "titulo": "",
+  "subtitulo": "",
+  "referencia_abnt": "",
+  "cronograma": [
+    {
+      "secao": "Capítulo 1",
+      "titulo": "",
+      "datas": "",
+      "horas": ""
+    }
+  ]
+}

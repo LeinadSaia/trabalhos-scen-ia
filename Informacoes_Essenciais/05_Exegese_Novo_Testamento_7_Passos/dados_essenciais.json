@@ -1,0 +1,56 @@
+{
+  "aluno": "",
+  "curso": "",
+  "ano": "2026",
+  "disciplina": "Exegese do Novo Testamento",
+  "professor": "",
+  "titulo": "",
+  "passagem": "",
+  "secoes": [
+    {
+      "titulo": "PASSO 1",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "PASSO 2",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "PASSO 3",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "PASSO 4",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "PASSO 5",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "PASSO 6",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "PASSO 7",
+      "paragrafos": [
+        ""
+      ]
+    }
+  ],
+  "referencias": [
+    ""
+  ]
+}

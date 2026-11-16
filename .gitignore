@@ -1,0 +1,7 @@
+.scen_config.json
+.venv/
+__pycache__/
+*.pyc
+Rascunhos/
+Trabalhos Gerados/
+*.tmp

@@ -1,0 +1,33 @@
+{
+  "aluno": "",
+  "curso": "",
+  "ano": "2026",
+  "disciplina": "",
+  "professor": "",
+  "titulo": "",
+  "subtitulo": "",
+  "sinopse": "",
+  "secoes": [
+    {
+      "titulo": "1 INTRODUÇÃO",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "2 DESENVOLVIMENTO",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "3 CONCLUSÃO",
+      "paragrafos": [
+        ""
+      ]
+    }
+  ],
+  "referencias": [
+    ""
+  ]
+}
