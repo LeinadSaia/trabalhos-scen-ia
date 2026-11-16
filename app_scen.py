@@ -878,9 +878,6 @@ class ScenApp(QMainWindow):
             grid_calc.setSpacing(6)
             ed_ini = QLineEdit(padrao["data_inicio"])
             ed_fim = QLineEdit(padrao["data_fim"])
-            cb_dias = QComboBox()
-            cb_dias.addItems(["Segunda a Sexta", "Todos os dias", "Seg, Qua, Sex", "Fins de semana"])
-            cb_dias.setCurrentText(padrao["dias_disponiveis"])
             ed_ritmo = QLineEdit(str(padrao["ritmo_paginas_hora"]))
             btn_calc = QPushButton("Calcular Datas e Horas")
             btn_calc.setObjectName("btnIA")
@@ -889,11 +886,21 @@ class ScenApp(QMainWindow):
             grid_calc.addWidget(ed_ini, 0, 1)
             grid_calc.addWidget(QLabel("Fim:"), 0, 2)
             grid_calc.addWidget(ed_fim, 0, 3)
-            grid_calc.addWidget(QLabel("Dias:"), 1, 0)
-            grid_calc.addWidget(cb_dias, 1, 1)
-            grid_calc.addWidget(QLabel("Pág./hora:"), 1, 2)
-            grid_calc.addWidget(ed_ritmo, 1, 3)
+            grid_calc.addWidget(QLabel("Pág./hora:"), 0, 4)
+            grid_calc.addWidget(ed_ritmo, 0, 5)
             self.lay_corpo.addLayout(grid_calc)
+
+            # Caixas de seleção individuais para cada dia da semana
+            h_dias = QHBoxLayout()
+            h_dias.addWidget(QLabel("Dias de leitura:"))
+            dias_checks: list[tuple[int, QCheckBox]] = []
+            for idx_dia, nome_dia in enumerate(["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]):
+                chk = QCheckBox(nome_dia)
+                chk.setChecked(idx_dia < 5)
+                h_dias.addWidget(chk)
+                dias_checks.append((idx_dia, chk))
+            h_dias.addStretch()
+            self.lay_corpo.addLayout(h_dias)
             self.lay_corpo.addWidget(btn_calc)
 
             add_label("Cronograma de Leitura (4 blocos padrão — editável) *:")
@@ -913,6 +920,10 @@ class ScenApp(QMainWindow):
                         tab.setItem(r, idx, QTableWidgetItem(str(row_data.get(k, ""))))
 
             def recalcular() -> None:
+                dias_sel = {idx_d for idx_d, chk in dias_checks if chk.isChecked()}
+                if not dias_sel:
+                    QMessageBox.warning(self, "Dias de leitura", "Selecione pelo menos um dia da semana.")
+                    return
                 blocos = []
                 for r in range(tab.rowCount()):
                     blocos.append({
@@ -924,7 +935,7 @@ class ScenApp(QMainWindow):
                         blocos,
                         ed_ini.text(),
                         ed_fim.text(),
-                        cb_dias.currentText(),
+                        dias_sel,
                         float(ed_ritmo.text().replace(",", ".") or 25),
                     )
                     preencher_tabela(calc)

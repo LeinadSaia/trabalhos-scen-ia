@@ -957,7 +957,7 @@ def calcular_cronograma_leitura(
     blocos: list[dict[str, str]],
     data_inicio_str: str,
     data_fim_str: str,
-    dias_disponiveis: str = "Segunda a Sexta",
+    dias_disponiveis: str | set[int] | list[int] = "Segunda a Sexta",
     ritmo_paginas_hora: float = 25.0,
 ) -> list[dict[str, str]]:
     """Calcula intervalos de datas e horas proporcionais ao número de páginas de cada bloco."""
@@ -969,12 +969,15 @@ def calcular_cronograma_leitura(
     if d_fim < d_ini:
         d_ini, d_fim = d_fim, d_ini
 
-    permitidos = {
-        "Segunda a Sexta": {0, 1, 2, 3, 4},
-        "Todos os dias": {0, 1, 2, 3, 4, 5, 6},
-        "Seg, Qua, Sex": {0, 2, 4},
-        "Fins de semana": {5, 6},
-    }.get(dias_disponiveis, {0, 1, 2, 3, 4, 5, 6})
+    if isinstance(dias_disponiveis, (set, list, tuple)):
+        permitidos = {int(d) for d in dias_disponiveis} or {0, 1, 2, 3, 4, 5, 6}
+    else:
+        permitidos = {
+            "Segunda a Sexta": {0, 1, 2, 3, 4},
+            "Todos os dias": {0, 1, 2, 3, 4, 5, 6},
+            "Seg, Qua, Sex": {0, 2, 4},
+            "Fins de semana": {5, 6},
+        }.get(dias_disponiveis, {0, 1, 2, 3, 4, 5, 6})
 
     datas_uteis: list[date] = []
     cur = d_ini
