@@ -1281,8 +1281,8 @@ def gerar_documento(tipo: str, dados: dict[str, Any], destino_base: Path) -> tup
     if tipo not in CONSTRUTORES:
         raise ValueError(f"Tipo inválido '{tipo}'. Opções: {', '.join(CONSTRUTORES)}")
     destino_base.parent.mkdir(parents=True, exist_ok=True)
-    caminho_docx = destino_base.with_suffix(".docx")
-    caminho_pdf = destino_base.with_suffix(".pdf")
+    caminho_docx = Path(f"{destino_base}.docx")
+    caminho_pdf = Path(f"{destino_base}.pdf")
 
     doc = _configurar_documento()
     _, construtor = CONSTRUTORES[tipo]
