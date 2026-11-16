@@ -51,7 +51,14 @@ from ai_assistant import (
     listar_modelos_disponiveis,
     montar_prompt_ia,
 )
-from gerar_trabalho import BASE_DIR, CIDADE_PADRAO, GERADOS_DIR, gerar_documento
+from gerar_trabalho import (
+    BASE_DIR,
+    CIDADE_PADRAO,
+    DADOS_ESSENCIAIS_TEMPLATE,
+    GERADOS_DIR,
+    calcular_cronograma_leitura,
+    gerar_documento,
+)
 
 
 CONFIG_PATH = BASE_DIR / ".scen_config.json"
@@ -60,7 +67,11 @@ RASCUNHOS_DIR = BASE_DIR / "Rascunhos"
 ATALHOS_DISCIPLINAS: list[tuple[str, str, dict[str, Any]]] = [
     ("Exegese do NT — Passos 1 a 7", "exegese_nt", {"disciplina": "Exegese do Novo Testamento"}),
     ("Teologia da Família — Paper", "paper", {"disciplina": "Teologia da Família"}),
-    ("Teologia da Família — Família do Pastor", "declaracao_atual", {"disciplina": "Teologia da Família", "titulo": "Família do Pastor"}),
+    ("Teologia da Família — Família do Pastor", "declaracao_atual", {
+        "disciplina": "Teologia da Família",
+        "titulo": "A família do pastor",
+        "subtitulo": "como amar e servir a família e a igreja juntos",
+    }),
     ("Apologética — Por que você acredita?", "relatorio_leitura", {"disciplina": "Apologética", "titulo": "Por que você acredita?"}),
     ("Prática da Pregação — Sermão Narrativa", "sermao_narrativa", {"disciplina": "Prática da Pregação"}),
     ("Prática da Pregação — Sermão Evangelho", "sermao_evangelho", {"disciplina": "Prática da Pregação"}),
@@ -858,14 +869,80 @@ class ScenApp(QMainWindow):
             return ed
 
         if tipo == "declaracao_atual":
-            add_line("referencia_abnt", "Referência ABNT da obra *:", "SOBRENOME, Nome. Título. Cidade: Editora, Ano.")
-            add_label("Cronograma de Leitura *:")
-            tab = QTableWidget(3, 4)
+            padrao = DADOS_ESSENCIAIS_TEMPLATE["declaracao_atual"]
+            ed_ref = add_line("referencia_abnt", "Referência ABNT da obra *:", "SOBRENOME, Nome. Título. Cidade: Editora, Ano.")
+            ed_ref.setText(padrao["referencia_abnt"])
+
+            add_label("Calculadora Automática de Cronograma (Datas & Horas):")
+            grid_calc = QGridLayout()
+            grid_calc.setSpacing(6)
+            ed_ini = QLineEdit(padrao["data_inicio"])
+            ed_fim = QLineEdit(padrao["data_fim"])
+            cb_dias = QComboBox()
+            cb_dias.addItems(["Segunda a Sexta", "Todos os dias", "Seg, Qua, Sex", "Fins de semana"])
+            cb_dias.setCurrentText(padrao["dias_disponiveis"])
+            ed_ritmo = QLineEdit(str(padrao["ritmo_paginas_hora"]))
+            btn_calc = QPushButton("Calcular Datas e Horas")
+            btn_calc.setObjectName("btnIA")
+
+            grid_calc.addWidget(QLabel("Início:"), 0, 0)
+            grid_calc.addWidget(ed_ini, 0, 1)
+            grid_calc.addWidget(QLabel("Fim:"), 0, 2)
+            grid_calc.addWidget(ed_fim, 0, 3)
+            grid_calc.addWidget(QLabel("Dias:"), 1, 0)
+            grid_calc.addWidget(cb_dias, 1, 1)
+            grid_calc.addWidget(QLabel("Pág./hora:"), 1, 2)
+            grid_calc.addWidget(ed_ritmo, 1, 3)
+            self.lay_corpo.addLayout(grid_calc)
+            self.lay_corpo.addWidget(btn_calc)
+
+            add_label("Cronograma de Leitura (4 blocos padrão — editável) *:")
+            tab = QTableWidget(0, 4)
             tab.setHorizontalHeaderLabels(["Seção", "Título", "Datas", "Horas"])
             tab.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-            tab.setMinimumHeight(200)
+            tab.setMinimumHeight(210)
             self.lay_corpo.addWidget(tab)
             self.campos_dinamicos["cronograma"] = tab
+
+            def preencher_tabela(linhas: list[dict[str, str]]) -> None:
+                tab.setRowCount(0)
+                for row_data in linhas:
+                    r = tab.rowCount()
+                    tab.insertRow(r)
+                    for idx, k in enumerate(["secao", "titulo", "datas", "horas"]):
+                        tab.setItem(r, idx, QTableWidgetItem(str(row_data.get(k, ""))))
+
+            def recalcular() -> None:
+                blocos = []
+                for r in range(tab.rowCount()):
+                    blocos.append({
+                        "secao": tab.item(r, 0).text().strip() if tab.item(r, 0) else "",
+                        "titulo": tab.item(r, 1).text().strip() if tab.item(r, 1) else "",
+                    })
+                try:
+                    calc = calcular_cronograma_leitura(
+                        blocos,
+                        ed_ini.text(),
+                        ed_fim.text(),
+                        cb_dias.currentText(),
+                        float(ed_ritmo.text().replace(",", ".") or 25),
+                    )
+                    preencher_tabela(calc)
+                    self.lbl_status.setText("Cronograma calculado proporcionalmente às páginas!")
+                except Exception as exc:
+                    QMessageBox.warning(self, "Erro no cálculo", str(exc))
+
+            btn_calc.clicked.connect(recalcular)
+            preencher_tabela(
+                calcular_cronograma_leitura(
+                    padrao["cronograma"],
+                    padrao["data_inicio"],
+                    padrao["data_fim"],
+                    padrao["dias_disponiveis"],
+                    padrao["ritmo_paginas_hora"],
+                )
+            )
+
             hb = QHBoxLayout()
             b_add = QPushButton("+ Adicionar Linha")
             b_add.clicked.connect(lambda: tab.insertRow(tab.rowCount()))

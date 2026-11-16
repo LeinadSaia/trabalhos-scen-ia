@@ -10,9 +10,11 @@ em `.docx` e `.pdf` em `Trabalhos Gerados/`.
 from __future__ import annotations
 
 import argparse
+from datetime import date, datetime, timedelta
 import html
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 import docx
@@ -784,9 +786,19 @@ CONSTRUTORES = {
 
 DADOS_ESSENCIAIS_TEMPLATE: dict[str, dict[str, Any]] = {
     "declaracao_atual": {
-        "aluno": "", "curso": "", "ano": "2026", "disciplina": "", "professor": "",
-        "titulo": "", "subtitulo": "", "referencia_abnt": "",
-        "cronograma": [{"secao": "Capítulo 1", "titulo": "", "datas": "", "horas": ""}],
+        "aluno": "", "curso": "", "ano": "2026", "disciplina": "Teologia da Família", "professor": "",
+        "titulo": "A família do pastor", "subtitulo": "como amar e servir a família e a igreja juntos",
+        "referencia_abnt": "CROFT, Brian; CROFT, Cara. A família do pastor: como amar e servir a família e a igreja juntos. São Paulo: Editora Fiel, 2021. 248 p.",
+        "data_inicio": "17/11/2026",
+        "data_fim": "30/11/2026",
+        "dias_disponiveis": "Segunda a Sexta",
+        "ritmo_paginas_hora": 25,
+        "cronograma": [
+            {"secao": "Introdução", "titulo": "Textos Iniciais e Introdução: O que é um Ministério Fiel? (30 páginas — p. 9 a 38)", "datas": "", "horas": ""},
+            {"secao": "Parte 1", "titulo": "O Coração do Pastor: Capítulos 1 e 2 + Reflexão (50 páginas — p. 39 a 88)", "datas": "", "horas": ""},
+            {"secao": "Parte 2", "titulo": "A Esposa do Pastor: Capítulos 3 e 4 + Reflexão (64 páginas — p. 89 a 152)", "datas": "", "horas": ""},
+            {"secao": "Parte 3", "titulo": "Os Filhos do Pastor, Conclusão e Apêndices: Capítulos 5 a 7 (96 páginas — p. 153 a 248)", "datas": "", "horas": ""},
+        ],
     },
     "declaracao_antiga": {
         "aluno": "", "curso": "", "ano": "2026", "disciplina": "", "professor": "",
@@ -916,6 +928,99 @@ def _gerar_pdf_reportlab(tipo: str, dados: dict[str, Any], caminho_pdf: Path) ->
                 story.append(Paragraph(_esc(p.text), st_sec if is_bold else st_body))
 
     doc_pdf.build(story)
+
+
+def _extrair_paginas_bloco(titulo: str) -> int:
+    """Extrai o número de páginas de um título como '(30 páginas — p. 9 a 38)'."""
+    m = re.search(r"(\d+)\s*p[áa]ginas?", titulo, re.IGNORECASE)
+    if m:
+        return max(1, int(m.group(1)))
+    m_range = re.search(r"p\.\s*(\d+)\s*(?:a|-|–)\s*(\d+)", titulo, re.IGNORECASE)
+    if m_range:
+        return max(1, int(m_range.group(2)) - int(m_range.group(1)) + 1)
+    return 30
+
+
+def _formatar_horas_pt(horas_float: float) -> str:
+    """Formata horas decimais em português (ex.: '1 hora e 12 minutos')."""
+    total_min = max(1, round(horas_float * 60))
+    h, m = divmod(total_min, 60)
+    partes = []
+    if h:
+        partes.append(f"{h} {'hora' if h == 1 else 'horas'}")
+    if m:
+        partes.append(f"{m} {'minuto' if m == 1 else 'minutos'}")
+    return " e ".join(partes)
+
+
+def calcular_cronograma_leitura(
+    blocos: list[dict[str, str]],
+    data_inicio_str: str,
+    data_fim_str: str,
+    dias_disponiveis: str = "Segunda a Sexta",
+    ritmo_paginas_hora: float = 25.0,
+) -> list[dict[str, str]]:
+    """Calcula intervalos de datas e horas proporcionais ao número de páginas de cada bloco."""
+    if not blocos:
+        return []
+    ritmo = max(1.0, float(ritmo_paginas_hora))
+    d_ini = datetime.strptime(data_inicio_str.strip(), "%d/%m/%Y").date()
+    d_fim = datetime.strptime(data_fim_str.strip(), "%d/%m/%Y").date()
+    if d_fim < d_ini:
+        d_ini, d_fim = d_fim, d_ini
+
+    permitidos = {
+        "Segunda a Sexta": {0, 1, 2, 3, 4},
+        "Todos os dias": {0, 1, 2, 3, 4, 5, 6},
+        "Seg, Qua, Sex": {0, 2, 4},
+        "Fins de semana": {5, 6},
+    }.get(dias_disponiveis, {0, 1, 2, 3, 4, 5, 6})
+
+    datas_uteis: list[date] = []
+    cur = d_ini
+    while cur <= d_fim:
+        if cur.weekday() in permitidos:
+            datas_uteis.append(cur)
+        cur += timedelta(days=1)
+    if not datas_uteis:
+        datas_uteis = [d_ini]
+
+    paginas = [_extrair_paginas_bloco(b.get("titulo", "")) for b in blocos]
+    total_pag = sum(paginas)
+    n_dias = len(datas_uteis)
+
+    # Distribuição proporcional com mínimo de 1 dia quando há dias suficientes
+    if n_dias >= len(blocos):
+        aloc = [max(1, round((p / total_pag) * n_dias)) for p in paginas]
+        while sum(aloc) > n_dias:
+            idx_max = max(range(len(aloc)), key=lambda i: aloc[i] if aloc[i] > 1 else -1)
+            aloc[idx_max] -= 1
+        while sum(aloc) < n_dias:
+            idx_max = max(range(len(aloc)), key=lambda i: paginas[i] / aloc[i])
+            aloc[idx_max] += 1
+    else:
+        aloc = [1] * len(blocos)
+
+    resultado: list[dict[str, str]] = []
+    cursor = 0
+    for idx, bloco in enumerate(blocos):
+        qtd = aloc[idx]
+        if n_dias >= len(blocos):
+            d1 = datas_uteis[cursor]
+            d2 = datas_uteis[min(n_dias - 1, cursor + qtd - 1)]
+            cursor += qtd
+        else:
+            pos = min(n_dias - 1, int(idx * n_dias / len(blocos)))
+            d1 = d2 = datas_uteis[pos]
+
+        data_fmt = d1.strftime("%d/%m/%Y") if d1 == d2 else f"{d1.strftime('%d/%m/%Y')} a {d2.strftime('%d/%m/%Y')}"
+        resultado.append({
+            "secao": bloco.get("secao", ""),
+            "titulo": bloco.get("titulo", ""),
+            "datas": data_fmt,
+            "horas": _formatar_horas_pt(paginas[idx] / ritmo),
+        })
+    return resultado
 
 
 def gerar_documento(tipo: str, dados: dict[str, Any], destino_base: Path) -> tuple[Path, Path]:

@@ -2,15 +2,37 @@
   "aluno": "",
   "curso": "",
   "ano": "2026",
-  "disciplina": "",
+  "disciplina": "Teologia da Família",
   "professor": "",
-  "titulo": "",
-  "subtitulo": "",
-  "referencia_abnt": "",
+  "titulo": "A família do pastor",
+  "subtitulo": "como amar e servir a família e a igreja juntos",
+  "referencia_abnt": "CROFT, Brian; CROFT, Cara. A família do pastor: como amar e servir a família e a igreja juntos. São Paulo: Editora Fiel, 2021. 248 p.",
+  "data_inicio": "17/11/2026",
+  "data_fim": "30/11/2026",
+  "dias_disponiveis": "Segunda a Sexta",
+  "ritmo_paginas_hora": 25,
   "cronograma": [
     {
-      "secao": "Capítulo 1",
-      "titulo": "",
+      "secao": "Introdução",
+      "titulo": "Textos Iniciais e Introdução: O que é um Ministério Fiel? (30 páginas — p. 9 a 38)",
+      "datas": "",
+      "horas": ""
+    },
+    {
+      "secao": "Parte 1",
+      "titulo": "O Coração do Pastor: Capítulos 1 e 2 + Reflexão (50 páginas — p. 39 a 88)",
+      "datas": "",
+      "horas": ""
+    },
+    {
+      "secao": "Parte 2",
+      "titulo": "A Esposa do Pastor: Capítulos 3 e 4 + Reflexão (64 páginas — p. 89 a 152)",
+      "datas": "",
+      "horas": ""
+    },
+    {
+      "secao": "Parte 3",
+      "titulo": "Os Filhos do Pastor, Conclusão e Apêndices: Capítulos 5 a 7 (96 páginas — p. 153 a 248)",
       "datas": "",
       "horas": ""
     }
