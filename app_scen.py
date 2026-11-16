@@ -57,6 +57,7 @@ from gerar_trabalho import (
     DADOS_ESSENCIAIS_TEMPLATE,
     GERADOS_DIR,
     calcular_cronograma_leitura,
+    destino_trabalho_organizado,
     gerar_documento,
 )
 
@@ -1327,16 +1328,15 @@ class ScenApp(QMainWindow):
         if self.chk_padrao_cabecalho.isChecked():
             self._salvar_config()
         dados = self._coletar_dados()
-        slug = (dados.get("titulo") or self.tipo_atual).strip().replace(" ", "_")
-        slug = "".join(c for c in slug if c.isalnum() or c in "_-") or self.tipo_atual
-        destino_base = GERADOS_DIR / f"{self.tipo_atual}_{slug}"
+        destino_base = destino_trabalho_organizado(self.tipo_atual, dados)
         try:
             docx_p, pdf_p = gerar_documento(self.tipo_atual, dados, destino_base)
-            self.lbl_status.setText(f"Gerados: {docx_p.name} e {pdf_p.name}")
+            pasta_rel = docx_p.parent.relative_to(GERADOS_DIR)
+            self.lbl_status.setText(f"Gerados em {pasta_rel}: {docx_p.name} e {pdf_p.name}")
             QMessageBox.information(
                 self,
                 "Trabalho Gerado!",
-                f"Arquivos criados em '{GERADOS_DIR.name}/':\n\n- {docx_p.name}\n- {pdf_p.name}",
+                f"Arquivos salvos em '{GERADOS_DIR.name}/{pasta_rel}/':\n\n- {docx_p.name}\n- {pdf_p.name}",
             )
         except Exception as exc:
             QMessageBox.critical(self, "Erro ao gerar", str(exc))

@@ -1141,6 +1141,20 @@ def inicializar_tudo() -> None:
         )
 
 
+def _limpar_nome(texto: str, fallback: str = "Trabalho") -> str:
+    """Gera um nome de pasta/arquivo limpo e curto, sem caracteres inválidos."""
+    limpo = re.sub(r"[^\w\s-]", "", (texto or "").strip(), flags=re.UNICODE)
+    limpo = re.sub(r"\s+", "_", limpo).strip("_-")
+    return (limpo[:60].rstrip("_-") or fallback)
+
+
+def destino_trabalho_organizado(tipo: str, dados: dict[str, Any]) -> Path:
+    """Retorna o caminho base organizado em `Trabalhos Gerados/<Disciplina>/<Titulo>/<Titulo>`."""
+    disciplina_pasta = _limpar_nome(dados.get("disciplina", ""), fallback=tipo)
+    titulo_pasta = _limpar_nome(dados.get("titulo", ""), fallback=tipo)
+    return GERADOS_DIR / disciplina_pasta / titulo_pasta / titulo_pasta
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Gerador de trabalhos acadêmicos SCEN (DOCX e PDF).")
     parser.add_argument("--init-templates", action="store_true", help="Cria modelos DOCX/PDF e pasta Informacoes_Essenciais/.")
@@ -1158,8 +1172,7 @@ def main() -> None:
         parser.error("Informe --init-templates ou (--tipo e --dados).")
 
     dados = json.loads(args.dados.read_text(encoding="utf-8"))
-    slug = dados.get("titulo", "trabalho").strip().replace(" ", "_") or "trabalho"
-    saida_base = args.saida or (GERADOS_DIR / f"{args.tipo}_{slug}")
+    saida_base = args.saida or destino_trabalho_organizado(args.tipo, dados)
     docx_p, pdf_p = gerar_documento(args.tipo, dados, saida_base)
     print(f"Gerados:\n - {docx_p}\n - {pdf_p}")
 
