@@ -614,6 +614,8 @@ def construir_sermao(doc: docx.Document, dados: dict[str, Any], genero: str) -> 
     natureza = f"Esboço de sermão em {genero.lower()} apresentado para aprovação na disciplina {disciplina} do Seminário Cristão Evangélico do Norte, no {curso}."
     _add_capa_e_folha_rosto(doc, dados, natureza)
     _add_secoes(doc, _secoes_sermao(dados, genero))
+    if dados.get("referencias"):
+        _add_referencias(doc, dados["referencias"])
 
 
 def construir_fichamento(doc: docx.Document, dados: dict[str, Any]) -> None:
@@ -879,7 +881,8 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
         genero_map = {"sermao_narrativa": "Narrativa", "sermao_evangelho": "Evangelho", "sermao_parabola": "Parábola"}
         genero = genero_map[tipo]
         nat = f"Esboço de sermão em {genero.lower()} apresentado para aprovação na disciplina {dados.get('disciplina', 'Prática da Pregação')} do Seminário Cristão Evangélico do Norte, no {curso}."
-        corpo = _render_secoes_html(_secoes_sermao(dados, genero))
+        refs_html = _render_refs_html(dados["referencias"]) if dados.get("referencias") else ""
+        corpo = _render_secoes_html(_secoes_sermao(dados, genero)) + refs_html
     elif tipo == "fichamento":
         nat = f"Fichamento de {dados.get('tipo_fichamento', 'Resumo / Transcrição / Comentário')} apresentado para aprovação na disciplina {disciplina} do Seminário Cristão Evangélico do Norte, no {curso}."
         fichas = dados.get("fichas", [
