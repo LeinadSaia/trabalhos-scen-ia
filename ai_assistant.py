@@ -101,7 +101,7 @@ def chamar_ia(
     if provedor == "gemini":
         if not api_key:
             raise ValueError("Informe a API Key do Gemini nas configurações.")
-        mod = modelo or "gemini-2.5-flash"
+        mod = modelo or "gemini-2.5-pro"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={api_key}"
         resp = _post_json(url, {"contents": [{"parts": [{"text": prompt}]}]})
         try:
@@ -135,5 +135,39 @@ def chamar_ia(
         if "response" not in resp:
             raise RuntimeError(f"Resposta inesperada do Ollama: {resp}")
         return resp["response"]
+
+    raise ValueError(f"Provedor desconhecido: {provedor}")
+
+
+def listar_modelos_disponiveis(provedor: str, *, api_key: str = "", base_url: str = "") -> list[str]:
+    """Consulta a API do provedor (Gemini, OpenAI ou Ollama) e retorna os modelos disponíveis."""
+    prov = provedor.lower()
+    if prov == "gemini":
+        if not api_key:
+            raise ValueError("Informe a API Key do Gemini para listar os modelos da sua conta.")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        with urllib.request.urlopen(urllib.request.Request(url), timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        modelos = [
+            m["name"].removeprefix("models/")
+            for m in data.get("models", [])
+            if "generateContent" in m.get("supportedGenerationMethods", [])
+        ]
+        return sorted(set(modelos), reverse=True)
+
+    if prov == "openai":
+        if not api_key:
+            raise ValueError("Informe a API Key da OpenAI para listar os modelos.")
+        endpoint = (base_url.rstrip("/") if base_url else "https://api.openai.com/v1") + "/models"
+        req = urllib.request.Request(endpoint, headers={"Authorization": f"Bearer {api_key}"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return sorted({m["id"] for m in data.get("data", []) if "id" in m}, reverse=True)
+
+    if prov == "ollama":
+        endpoint = (base_url.rstrip("/") if base_url else "http://localhost:11434") + "/api/tags"
+        with urllib.request.urlopen(urllib.request.Request(endpoint), timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return [m["name"] for m in data.get("models", []) if "name" in m]
 
     raise ValueError(f"Provedor desconhecido: {provedor}")

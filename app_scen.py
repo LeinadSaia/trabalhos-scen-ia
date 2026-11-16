@@ -42,7 +42,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ai_assistant import chamar_ia, extrair_json_resposta, extrair_texto_arquivo, montar_prompt_ia
+from ai_assistant import (
+    chamar_ia,
+    extrair_json_resposta,
+    extrair_texto_arquivo,
+    listar_modelos_disponiveis,
+    montar_prompt_ia,
+)
 from gerar_trabalho import BASE_DIR, CIDADE_PADRAO, GERADOS_DIR, gerar_documento
 
 
@@ -313,6 +319,30 @@ TEMA_ESCURO_TOTAL = """
 """
 
 
+MODELOS_POR_PROVEDOR: dict[str, list[str]] = {
+    "Gemini": [
+        "gemini-4-carbon",
+        "gemini-4-argon",
+        "gemini-2.5-pro",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash",
+    ],
+    "OpenAI": [
+        "gpt-4.1",
+        "o3",
+        "gpt-4o",
+        "o4-mini",
+        "gpt-4o-mini",
+    ],
+    "Ollama": [
+        "llama3.3",
+        "qwen2.5:14b",
+        "llama3.1",
+        "mistral",
+    ],
+}
+
+
 class AIWorker(QThread):
     """Thread em segundo plano para chamadas à API de IA sem travar a interface."""
 
@@ -575,7 +605,16 @@ class ScenApp(QMainWindow):
         fc = QFormLayout(grp_cfg)
         self.cb_provedor = QComboBox()
         self.cb_provedor.addItems(["Gemini", "OpenAI", "Ollama"])
-        self.ed_modelo_ia = QLineEdit("gemini-2.5-flash")
+        self.cb_modelo_ia = QComboBox()
+        self.cb_modelo_ia.setEditable(True)
+        self.cb_modelo_ia.addItems(MODELOS_POR_PROVEDOR["Gemini"])
+        btn_buscar_mod = QPushButton("Buscar da API")
+        btn_buscar_mod.setToolTip("Consulta os modelos disponíveis na sua conta/API ou Ollama local")
+        btn_buscar_mod.clicked.connect(self._buscar_modelos_ia)
+        h_mod = QHBoxLayout()
+        h_mod.addWidget(self.cb_modelo_ia, stretch=1)
+        h_mod.addWidget(btn_buscar_mod)
+
         self.ed_api_key = QLineEdit()
         self.ed_api_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.ed_api_key.setPlaceholderText("Chave API (não precisa para Ollama)")
@@ -584,7 +623,7 @@ class ScenApp(QMainWindow):
         self.cb_provedor.currentTextChanged.connect(self._on_provedor_mudou)
 
         fc.addRow("Provedor:", self.cb_provedor)
-        fc.addRow("Modelo:", self.ed_modelo_ia)
+        fc.addRow("Modelo:", h_mod)
         fc.addRow("API Key:", self.ed_api_key)
         fc.addRow("Base URL:", self.ed_base_url)
         lay.addWidget(grp_cfg)
@@ -649,8 +688,28 @@ class ScenApp(QMainWindow):
         return w
 
     def _on_provedor_mudou(self, texto: str) -> None:
-        sugestoes = {"Gemini": "gemini-2.5-flash", "OpenAI": "gpt-4o-mini", "Ollama": "llama3.1"}
-        self.ed_modelo_ia.setText(sugestoes.get(texto, ""))
+        self.cb_modelo_ia.clear()
+        self.cb_modelo_ia.addItems(MODELOS_POR_PROVEDOR.get(texto, []))
+
+    def _buscar_modelos_ia(self) -> None:
+        prov = self.cb_provedor.currentText()
+        try:
+            modelos = listar_modelos_disponiveis(
+                prov,
+                api_key=self.ed_api_key.text().strip(),
+                base_url=self.ed_base_url.text().strip(),
+            )
+            if not modelos:
+                QMessageBox.information(self, "Modelos", "Nenhum modelo retornado pelo provedor.")
+                return
+            atual = self.cb_modelo_ia.currentText()
+            self.cb_modelo_ia.clear()
+            self.cb_modelo_ia.addItems(modelos)
+            if atual in modelos:
+                self.cb_modelo_ia.setCurrentText(atual)
+            self.lbl_status.setText(f"{len(modelos)} modelos carregados de {prov}!")
+        except Exception as exc:
+            QMessageBox.warning(self, "Erro ao buscar modelos", str(exc))
 
     def _on_atalho_clicado(self, item: QListWidgetItem) -> None:
         tipo, pre = item.data(Qt.ItemDataRole.UserRole)
@@ -1056,7 +1115,7 @@ class ScenApp(QMainWindow):
             self.cb_provedor.currentText(),
             self._montar_prompt(),
             self.ed_api_key.text().strip(),
-            self.ed_modelo_ia.text().strip(),
+            self.cb_modelo_ia.currentText().strip(),
             self.ed_base_url.text().strip(),
         )
         self.worker.concluido.connect(self._on_ia_ok)
@@ -1126,7 +1185,7 @@ class ScenApp(QMainWindow):
     def _salvar_config(self) -> None:
         cfg = {
             "provedor": self.cb_provedor.currentText(),
-            "modelo": self.ed_modelo_ia.text().strip(),
+            "modelo": self.cb_modelo_ia.currentText().strip(),
             "api_key": self.ed_api_key.text().strip(),
             "base_url": self.ed_base_url.text().strip(),
         }
@@ -1136,7 +1195,7 @@ class ScenApp(QMainWindow):
         if CONFIG_PATH.exists():
             cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             self.cb_provedor.setCurrentText(cfg.get("provedor", "Gemini"))
-            self.ed_modelo_ia.setText(cfg.get("modelo", "gemini-2.5-flash"))
+            self.cb_modelo_ia.setCurrentText(cfg.get("modelo", "gemini-4-carbon"))
             self.ed_api_key.setText(cfg.get("api_key", ""))
             self.ed_base_url.setText(cfg.get("base_url", ""))
 
