@@ -230,25 +230,44 @@ def _add_referencias(doc: docx.Document, refs: list[str]) -> None:
         _add_p(doc, ref, align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.0, space_after=12)
 
 
-def _add_secoes(doc: docx.Document, secoes: list[dict[str, Any]]) -> None:
-    """Adiciona seções numeradas com título em negrito e parágrafos com recuo de 1,5 cm."""
+def _add_secoes(
+    doc: docx.Document,
+    secoes: list[dict[str, Any]],
+    *,
+    recuo_cm: float = 1.5,
+    space_after_body: float = 6,
+) -> None:
+    """Adiciona seções numeradas com suporte a parágrafos normais e citações diretas longas (>3 linhas)."""
     for sec in secoes:
         _add_p(
             doc,
             sec["titulo"],
             align=WD_ALIGN_PARAGRAPH.LEFT,
             bold=True,
-            space_before=6,
+            space_before=12,
             space_after=6,
         )
-        for paragrafo in sec.get("paragrafos", [sec.get("conteudo", "")]):
-            if paragrafo:
+        for item in sec.get("paragrafos", [sec.get("conteudo", "")]):
+            if not item:
+                continue
+            if isinstance(item, dict) and item.get("tipo") == "citacao_longa":
+                _add_linhas_vazias(doc, 1, line_spacing=1.0)
                 _add_p(
                     doc,
-                    paragrafo,
+                    item.get("texto", ""),
                     align=WD_ALIGN_PARAGRAPH.JUSTIFY,
-                    first_line_indent=1.5,
-                    space_after=6,
+                    size=10,
+                    line_spacing=1.0,
+                    left_indent=4.0,
+                )
+                _add_linhas_vazias(doc, 1, line_spacing=1.0)
+            else:
+                _add_p(
+                    doc,
+                    str(item),
+                    align=WD_ALIGN_PARAGRAPH.JUSTIFY,
+                    first_line_indent=recuo_cm,
+                    space_after=space_after_body,
                 )
 
 
@@ -424,6 +443,25 @@ def construir_paper(doc: docx.Document, dados: dict[str, Any]) -> None:
     _add_referencias(doc, refs)
 
 
+def construir_paper_check(doc: docx.Document, dados: dict[str, Any]) -> None:
+    """Construtor no padrão exato de `1 CHECK paper - MODELO 2024.docx` + ABNT (margens 3/2cm, recuo 2cm, citação 4cm)."""
+    sec = doc.sections[0]
+    sec.top_margin = Cm(3.0)
+    sec.left_margin = Cm(3.0)
+    sec.bottom_margin = Cm(2.0)
+    sec.right_margin = Cm(2.0)
+
+    disciplina = dados.get("disciplina", "{{DISCIPLINA}}")
+    curso = dados.get("curso", "{{CURSO}}")
+    natureza = f"Paper apresentado para aprovação na disciplina {disciplina} do Seminário Cristão Evangélico do Norte, no {curso}."
+    _add_capa_e_folha_rosto(doc, dados, natureza)
+
+    secoes = dados.get("secoes", [])
+    refs = dados.get("referencias", [])
+    _add_secoes(doc, secoes, recuo_cm=2.0, space_after_body=0)
+    _add_referencias(doc, refs)
+
+
 def construir_exegese_nt(doc: docx.Document, dados: dict[str, Any]) -> None:
     disciplina = dados.get("disciplina", "Exegese do Novo Testamento")
     curso = dados.get("curso", "{{CURSO}}")
@@ -571,13 +609,17 @@ def _render_capa_e_folha_html(dados: dict[str, Any], natureza: str) -> str:
     """
 
 
-def _render_secoes_html(secoes: list[dict[str, Any]]) -> str:
+def _render_secoes_html(secoes: list[dict[str, Any]], recuo_class: str = "recuo") -> str:
     partes: list[str] = []
     for sec in secoes:
         partes.append(f'<h2 class="sec-titulo">{_esc(sec["titulo"])}</h2>')
         for p in sec.get("paragrafos", [sec.get("conteudo", "")]):
-            if p:
-                partes.append(f'<p class="recuo">{_esc(p)}</p>')
+            if not p:
+                continue
+            if isinstance(p, dict) and p.get("tipo") == "citacao_longa":
+                partes.append(f'<p class="citacao-longa">{_esc(p.get("texto", ""))}</p>')
+            else:
+                partes.append(f'<p class="{recuo_class}">{_esc(p)}</p>')
     return "\n".join(partes)
 
 
@@ -648,6 +690,11 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
         ])
         refs = dados.get("referencias", ["{{SOBRENOME, Nome. Título da obra. Cidade: Editora, Ano.}}"])
         corpo = f'<p><strong>SINOPSE:</strong> {_esc(dados.get("sinopse", "{{TEXTO_DA_SINOPSE}}"))}</p>{_render_secoes_html(secoes)}{_render_refs_html(refs)}'
+    elif tipo == "paper_check":
+        nat = f"Paper apresentado para aprovação na disciplina {disciplina} do Seminário Cristão Evangélico do Norte, no {curso}."
+        secoes = dados.get("secoes", [])
+        refs = dados.get("referencias", [])
+        corpo = f'{_render_secoes_html(secoes, recuo_class="recuo-abnt")}{_render_refs_html(refs)}'
     elif tipo == "exegese_nt":
         nat = f"Trabalho exegético apresentado para aprovação na disciplina {dados.get('disciplina', 'Exegese do Novo Testamento')} do Seminário Cristão Evangélico do Norte, no {curso}."
         passagem = dados.get("passagem", "{{LIVRO CAPITULO:VERSICULOS}}")
@@ -746,6 +793,13 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
   .natureza p {{ margin: 0 0 6pt 0; }}
   p {{ margin: 0 0 8pt 0; text-align: justify; }}
   p.recuo {{ text-indent: 1.5cm; }}
+  p.recuo-abnt {{ text-indent: 2.0cm; margin: 0; }}
+  p.citacao-longa {{
+    margin: 12pt 0 12pt 4.0cm;
+    font-size: 10pt;
+    line-height: 1.0;
+    text-align: justify;
+  }}
   p.ref {{ text-align: left; line-height: 1.15; margin-bottom: 12pt; }}
   h2.sec-titulo {{ font-size: 12pt; font-weight: bold; text-align: left; margin: 12pt 0 6pt 0; }}
   table {{ width: 100%; border-collapse: collapse; margin-top: 12pt; }}
@@ -773,6 +827,7 @@ CONSTRUTORES = {
     "declaracao_antiga": ("02_Declaracao_Leitura_Antiga", construir_declaracao_antiga),
     "relatorio_leitura": ("03_Relatorio_de_Leitura", construir_relatorio_leitura),
     "paper": ("04_Paper", construir_paper),
+    "paper_check": ("13_Paper_Check_ABNT", construir_paper_check),
     "exegese_nt": ("05_Exegese_Novo_Testamento_7_Passos", construir_exegese_nt),
     "sermao_narrativa": ("06_Sermao_Narrativa", lambda d, p: construir_sermao(d, p, "Narrativa")),
     "sermao_evangelho": ("07_Sermao_Evangelho", lambda d, p: construir_sermao(d, p, "Evangelho")),
@@ -814,6 +869,24 @@ DADOS_ESSENCIAIS_TEMPLATE: dict[str, dict[str, Any]] = {
         "aluno": "", "curso": "", "ano": "2026", "disciplina": "", "professor": "",
         "titulo": "", "subtitulo": "", "sinopse": "",
         "secoes": [{"titulo": "1 INTRODUÇÃO", "paragrafos": [""]}, {"titulo": "2 DESENVOLVIMENTO", "paragrafos": [""]}, {"titulo": "3 CONCLUSÃO", "paragrafos": [""]}],
+        "referencias": [""],
+    },
+    "paper_check": {
+        "aluno": "", "curso": "", "ano": "2026", "disciplina": "", "professor": "",
+        "titulo": "", "subtitulo": "",
+        "secoes": [
+            {"titulo": "1 NOME", "paragrafos": [""]},
+            {"titulo": "2 TÍTULO", "paragrafos": [""]},
+            {"titulo": "2.1 Delimitação do Tema", "paragrafos": [""]},
+            {"titulo": "3 CONSTRUÇÃO DO PROBLEMA", "paragrafos": [""]},
+            {"titulo": "4 HIPÓTESES", "paragrafos": [""]},
+            {"titulo": "5 JUSTIFICATIVA", "paragrafos": [""]},
+            {"titulo": "6 OBJETIVOS", "paragrafos": [""]},
+            {"titulo": "6.1 Objetivo Geral", "paragrafos": [""]},
+            {"titulo": "6.2 Objetivos Específicos", "paragrafos": [""]},
+            {"titulo": "7 REFERENCIAL TEÓRICO", "paragrafos": [""]},
+            {"titulo": "8 METODOLOGIA", "paragrafos": [""]},
+        ],
         "referencias": [""],
     },
     "exegese_nt": {

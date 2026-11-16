@@ -1,0 +1,80 @@
+{
+  "aluno": "",
+  "curso": "",
+  "ano": "2026",
+  "disciplina": "",
+  "professor": "",
+  "titulo": "",
+  "subtitulo": "",
+  "secoes": [
+    {
+      "titulo": "1 NOME",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "2 TÍTULO",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "2.1 Delimitação do Tema",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "3 CONSTRUÇÃO DO PROBLEMA",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "4 HIPÓTESES",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "5 JUSTIFICATIVA",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "6 OBJETIVOS",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "6.1 Objetivo Geral",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "6.2 Objetivos Específicos",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "7 REFERENCIAL TEÓRICO",
+      "paragrafos": [
+        ""
+      ]
+    },
+    {
+      "titulo": "8 METODOLOGIA",
+      "paragrafos": [
+        ""
+      ]
+    }
+  ],
+  "referencias": [
+    ""
+  ]
+}
