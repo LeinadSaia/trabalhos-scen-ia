@@ -49,18 +49,20 @@ CIDADE_PADRAO = "São Luís"
 
 
 def _configurar_documento() -> docx.Document:
-    """Cria um documento A4 com margens ABNT/SCEN (3cm sup/esq, 2cm inf/dir) e fonte Arial 12."""
+    """Cria um documento A4 com margens (2,54 cm) e fonte Times New Roman 12 extraídas dos modelos base."""
     doc = docx.Document()
     sec = doc.sections[0]
-    sec.page_width = Cm(21.0)
-    sec.page_height = Cm(29.7)
-    sec.top_margin = Cm(3.0)
-    sec.bottom_margin = Cm(2.0)
-    sec.left_margin = Cm(3.0)
-    sec.right_margin = Cm(2.0)
+    sec.page_width = Cm(21.01)
+    sec.page_height = Cm(29.69)
+    sec.top_margin = Cm(2.54)
+    sec.bottom_margin = Cm(2.54)
+    sec.left_margin = Cm(2.54)
+    sec.right_margin = Cm(2.54)
+    sec.header_distance = Cm(1.27)
+    sec.footer_distance = Cm(1.27)
 
     normal = doc.styles["Normal"]
-    normal.font.name = "Arial"
+    normal.font.name = "Times New Roman"
     normal.font.size = Pt(12)
     normal.paragraph_format.line_spacing = 1.5
     normal.paragraph_format.space_before = Pt(0)
@@ -96,7 +98,7 @@ def _add_p(
 
     if texto:
         run = p.add_run(texto)
-        run.font.name = "Arial"
+        run.font.name = "Times New Roman"
         run.font.size = Pt(size)
         run.bold = bold
         run.italic = italic
@@ -114,39 +116,46 @@ def _add_capa_e_folha_rosto(
     dados: dict[str, Any],
     natureza_texto: str,
 ) -> None:
-    """Constrói a Capa e a Folha de Rosto no padrão SCEN 2025."""
+    """Constrói a Capa e a Folha de Rosto com posicionamento e estilo exatos dos modelos base."""
     instituicao = dados.get("instituicao", INSTITUICAO_PADRAO)
     aluno = dados.get("aluno", "{{NOME_DO_ALUNO}}")
     titulo = dados.get("titulo", "{{TITULO_DO_TRABALHO}}")
     subtitulo = dados.get("subtitulo", "")
-    titulo_completo = f"{titulo}: {subtitulo}" if subtitulo else titulo
     cidade = dados.get("cidade", CIDADE_PADRAO)
     ano = str(dados.get("ano", "{{ANO}}"))
     professor = dados.get("professor", "{{NOME_DO_PROFESSOR}}")
 
-    # CAPA
-    _add_p(doc, instituicao.upper(), align=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
-    _add_linhas_vazias(doc, 2)
-    _add_p(doc, aluno, align=WD_ALIGN_PARAGRAPH.CENTER)
-    _add_linhas_vazias(doc, 8)
-    _add_p(doc, titulo_completo, align=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
-    _add_linhas_vazias(doc, 10)
-    _add_p(doc, cidade, align=WD_ALIGN_PARAGRAPH.CENTER)
-    _add_p(doc, ano, align=WD_ALIGN_PARAGRAPH.CENTER)
+    # === CAPA ===
+    _add_p(doc, instituicao.upper(), align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, line_spacing=1.0)
+    _add_linhas_vazias(doc, 4, line_spacing=1.0)
+    _add_p(doc, aluno, align=WD_ALIGN_PARAGRAPH.CENTER, line_spacing=1.0)
+    _add_linhas_vazias(doc, 9, line_spacing=1.0)
+    if subtitulo:
+        _add_p(doc, f"{titulo}:", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, line_spacing=1.0)
+        _add_p(doc, subtitulo, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, line_spacing=1.0)
+    else:
+        _add_p(doc, titulo, align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, line_spacing=1.0)
+    _add_linhas_vazias(doc, 12, line_spacing=1.0)
+    _add_p(doc, cidade, align=WD_ALIGN_PARAGRAPH.CENTER, line_spacing=1.0)
+    _add_p(doc, ano, align=WD_ALIGN_PARAGRAPH.CENTER, line_spacing=1.0)
     doc.add_page_break()
 
-    # FOLHA DE ROSTO
-    _add_p(doc, aluno, align=WD_ALIGN_PARAGRAPH.CENTER)
-    _add_linhas_vazias(doc, 9)
-    _add_p(doc, titulo_completo, align=WD_ALIGN_PARAGRAPH.CENTER, bold=True)
-    _add_linhas_vazias(doc, 2)
+    # === FOLHA DE ROSTO ===
+    _add_p(doc, aluno, align=WD_ALIGN_PARAGRAPH.CENTER, line_spacing=1.0)
+    _add_linhas_vazias(doc, 12, line_spacing=1.0)
+    if subtitulo:
+        _add_p(doc, f"{titulo}:", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, line_spacing=1.0)
+        _add_p(doc, subtitulo, align=WD_ALIGN_PARAGRAPH.CENTER, bold=False, line_spacing=1.0)
+    else:
+        _add_p(doc, titulo, align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, line_spacing=1.0)
+    _add_linhas_vazias(doc, 2, line_spacing=1.0)
     _add_p(
         doc,
         natureza_texto,
         align=WD_ALIGN_PARAGRAPH.JUSTIFY,
         size=10,
         line_spacing=1.0,
-        left_indent=7.5,
+        left_indent=8.0,
         space_after=6,
     )
     _add_p(
@@ -155,11 +164,11 @@ def _add_capa_e_folha_rosto(
         align=WD_ALIGN_PARAGRAPH.LEFT,
         size=10,
         line_spacing=1.0,
-        left_indent=7.5,
+        left_indent=8.0,
     )
-    _add_linhas_vazias(doc, 8)
-    _add_p(doc, cidade, align=WD_ALIGN_PARAGRAPH.CENTER)
-    _add_p(doc, ano, align=WD_ALIGN_PARAGRAPH.CENTER)
+    _add_linhas_vazias(doc, 10, line_spacing=1.0)
+    _add_p(doc, cidade, align=WD_ALIGN_PARAGRAPH.CENTER, line_spacing=1.0)
+    _add_p(doc, ano, align=WD_ALIGN_PARAGRAPH.CENTER, line_spacing=1.0)
     doc.add_page_break()
 
 
@@ -177,17 +186,35 @@ def _set_cell_border(cell: docx.table._Cell) -> None:
     tc_pr.append(borders)
 
 
-def _format_cell(cell: docx.table._Cell, texto: str, bold: bool = False) -> None:
-    """Formata célula da tabela em Arial 12 centralizado."""
+def _set_cell_shading(cell: docx.table._Cell, fill_hex: str) -> None:
+    """Aplica cor de fundo (shading) à célula da tabela."""
+    tc_pr = cell._tc.get_or_add_tcPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), fill_hex)
+    tc_pr.append(shd)
+
+
+def _format_cell(
+    cell: docx.table._Cell,
+    texto: str,
+    bold: bool = False,
+    align: WD_ALIGN_PARAGRAPH = WD_ALIGN_PARAGRAPH.CENTER,
+    fill_hex: str | None = None,
+) -> None:
+    """Formata célula da tabela em Times New Roman 12."""
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     _set_cell_border(cell)
+    if fill_hex:
+        _set_cell_shading(cell, fill_hex)
     p = cell.paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.alignment = align
     p.paragraph_format.line_spacing = 1.5
     p.paragraph_format.space_before = Pt(2)
     p.paragraph_format.space_after = Pt(2)
     run = p.add_run(texto)
-    run.font.name = "Arial"
+    run.font.name = "Times New Roman"
     run.font.size = Pt(12)
     run.bold = bold
 
@@ -295,15 +322,17 @@ def construir_declaracao_atual(doc: docx.Document, dados: dict[str, Any]) -> Non
         f"Seminário Cristão Evangélico do Norte, ministrada pelo/a professor/a {professor}, "
         f"que li a obra {livro}. Minha rotina de leitura seguiu o fluxo registrado no cronograma abaixo:",
         align=WD_ALIGN_PARAGRAPH.JUSTIFY,
-        first_line_indent=1.5,
         space_after=12,
     )
-    _add_p(doc, referencia, align=WD_ALIGN_PARAGRAPH.LEFT, line_spacing=1.0, space_after=12)
 
-    tabela = doc.add_table(rows=1, cols=4)
+    tabela = doc.add_table(rows=2, cols=4)
     tabela.alignment = WD_TABLE_ALIGNMENT.CENTER
+    # Linha 0 mesclada com a referência ABNT e fundo #F1F3F4 (igual ao Modelo de Declaração Atual.docx)
+    merged = tabela.rows[0].cells[0].merge(tabela.rows[0].cells[3])
+    _format_cell(merged, referencia, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT, fill_hex="F1F3F4")
+    # Linha 1 cabeçalhos
     for idx, texto in enumerate(["Seção", "Título", "Datas de início e de conclusão das partes da obra", "Horas empreendidas na parte da obra"]):
-        _format_cell(tabela.rows[0].cells[idx], texto, bold=True)
+        _format_cell(tabela.rows[1].cells[idx], texto, bold=True)
     for item in _cronograma_padrao(dados):
         row = tabela.add_row()
         _format_cell(row.cells[0], item.get("secao", ""))
@@ -575,10 +604,12 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
             for i in _cronograma_padrao(dados)
         )
         corpo = f"""
-        <p class="recuo">Declaro para fins de aprovação na disciplina {_esc(disciplina)} do {_esc(curso)} do Seminário Cristão Evangélico do Norte, ministrada pelo/a professor/a {_esc(professor)}, que li a obra {_esc(livro)}. Minha rotina de leitura seguiu o fluxo registrado no cronograma abaixo:</p>
-        <p class="ref">{_esc(referencia)}</p>
+        <p>Declaro para fins de aprovação na disciplina {_esc(disciplina)} do {_esc(curso)} do Seminário Cristão Evangélico do Norte, ministrada pelo/a professor/a {_esc(professor)}, que li a obra {_esc(livro)}. Minha rotina de leitura seguiu o fluxo registrado no cronograma abaixo:</p>
         <table>
-          <thead><tr><th>Seção</th><th>Título</th><th>Datas de início e de conclusão das partes da obra</th><th>Horas empreendidas na parte da obra</th></tr></thead>
+          <thead>
+            <tr><th colspan="4" class="ref-row">{_esc(referencia)}</th></tr>
+            <tr><th>Seção</th><th>Título</th><th>Datas de início e de conclusão das partes da obra</th><th>Horas empreendidas na parte da obra</th></tr>
+          </thead>
           <tbody>{linhas}</tbody>
         </table>
         """
@@ -674,10 +705,10 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
 <style>
   @page {{
     size: A4;
-    margin: 3cm 2cm 2cm 3cm;
+    margin: 2.54cm 2.54cm 2.54cm 2.54cm;
   }}
   body {{
-    font-family: Arial, "Liberation Sans", sans-serif;
+    font-family: "Times New Roman", "Liberation Serif", Times, serif;
     font-size: 12pt;
     line-height: 1.5;
     color: #000;
@@ -693,7 +724,7 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
   .mt-3 {{ margin-top: 36pt; }}
   .capa, .folha-rosto {{
     position: relative;
-    height: 24.5cm;
+    height: 24.4cm;
   }}
   .titulo-meio {{ margin-top: 7.5cm; }}
   .titulo-folha {{ margin-top: 8cm; }}
@@ -705,7 +736,7 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
   }}
   .natureza {{
     margin-top: 2cm;
-    margin-left: 7.5cm;
+    margin-left: 8.0cm;
     font-size: 10pt;
     line-height: 1.15;
     text-align: justify;
@@ -718,6 +749,7 @@ def _construir_html_pdf(tipo: str, dados: dict[str, Any]) -> str:
   table {{ width: 100%; border-collapse: collapse; margin-top: 12pt; }}
   th, td {{ border: 1px solid #000; padding: 6pt; text-align: center; vertical-align: middle; font-size: 11pt; }}
   th {{ font-weight: bold; }}
+  th.ref-row {{ background-color: #f1f3f4; font-weight: normal; text-align: left; }}
 </style>
 </head>
 <body>
@@ -816,18 +848,18 @@ def _gerar_pdf_reportlab(tipo: str, dados: dict[str, Any], caminho_pdf: Path) ->
     doc_pdf = SimpleDocTemplate(
         str(caminho_pdf),
         pagesize=A4,
-        topMargin=3.0 * cm,
-        bottomMargin=2.0 * cm,
-        leftMargin=3.0 * cm,
-        rightMargin=2.0 * cm,
+        topMargin=2.54 * cm,
+        bottomMargin=2.54 * cm,
+        leftMargin=2.54 * cm,
+        rightMargin=2.54 * cm,
     )
-    st_center = ParagraphStyle("center", fontName="Helvetica", fontSize=12, leading=18, alignment=TA_CENTER)
-    st_center_b = ParagraphStyle("center_b", parent=st_center, fontName="Helvetica-Bold")
-    st_body = ParagraphStyle("body", fontName="Helvetica", fontSize=12, leading=18, alignment=TA_JUSTIFY, firstLineIndent=1.5 * cm, spaceAfter=6)
-    st_left = ParagraphStyle("left", fontName="Helvetica", fontSize=12, leading=16, alignment=TA_LEFT, spaceAfter=6)
-    st_sec = ParagraphStyle("sec", fontName="Helvetica-Bold", fontSize=12, leading=18, alignment=TA_LEFT, spaceBefore=8, spaceAfter=4)
-    st_nat = ParagraphStyle("nat", fontName="Helvetica", fontSize=10, leading=13, alignment=TA_JUSTIFY, leftIndent=7.5 * cm, spaceAfter=4)
-    st_right = ParagraphStyle("right", fontName="Helvetica", fontSize=12, leading=18, alignment=TA_RIGHT, spaceBefore=12)
+    st_center = ParagraphStyle("center", fontName="Times-Roman", fontSize=12, leading=18, alignment=TA_CENTER)
+    st_center_b = ParagraphStyle("center_b", parent=st_center, fontName="Times-Bold")
+    st_body = ParagraphStyle("body", fontName="Times-Roman", fontSize=12, leading=18, alignment=TA_JUSTIFY, firstLineIndent=1.5 * cm, spaceAfter=6)
+    st_left = ParagraphStyle("left", fontName="Times-Roman", fontSize=12, leading=16, alignment=TA_LEFT, spaceAfter=6)
+    st_sec = ParagraphStyle("sec", fontName="Times-Bold", fontSize=12, leading=18, alignment=TA_LEFT, spaceBefore=8, spaceAfter=4)
+    st_nat = ParagraphStyle("nat", fontName="Times-Roman", fontSize=10, leading=13, alignment=TA_JUSTIFY, leftIndent=8.0 * cm, spaceAfter=4)
+    st_right = ParagraphStyle("right", fontName="Times-Roman", fontSize=12, leading=18, alignment=TA_RIGHT, spaceBefore=12)
 
     inst = _esc(dados.get("instituicao", INSTITUICAO_PADRAO).upper())
     aluno = _esc(dados.get("aluno", "{{NOME_DO_ALUNO}}"))
